@@ -1,0 +1,13 @@
+numori_born,condition,data_type,fraction
+1,Glycerol,Simulations,0.900145960333133
+2,Glycerol,Simulations,0.099854039666867
+1,Glucose,Simulations,0.18662996877150267
+2,Glucose,Simulations,0.8133700312284974
+1,Glucose +AA,Simulations,0.07772426001399696
+2,Glucose +AA,Simulations,0.9222757399860031
+1,Glycerol,Experiments,0.7953439888811675
+2,Glycerol,Experiments,0.20465601111883253
+1,Glucose,Experiments,0.15454545454545454
+2,Glucose,Experiments,0.8454545454545455
+1,Glucose +AA,Experiments,0.013054830287206266
+2,Glucose +AA,Experiments,0.9869451697127938
