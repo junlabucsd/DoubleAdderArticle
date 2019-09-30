@@ -1,0 +1,2 @@
+cd colicycle/
+pip install -e .
