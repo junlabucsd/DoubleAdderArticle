@@ -1,4 +1,4 @@
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/junlabucsd/DoubleAdderArticle/master)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/junlabucsd/DoubleAdderArticle/master?filepath=DoubleAdderArticle%2FResponse%2Fresponse_Witz2019_index.ipynb)
 
 # Response to Witz et al. eLife 2019;8:e48063
 doi: [10.7554/eLife.48063](https://doi.org/10.7554/eLife.48063)
