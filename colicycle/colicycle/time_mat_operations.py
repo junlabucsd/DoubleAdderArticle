@@ -1,5 +1,5 @@
 """
-This module allows to manipulate the Pandas dataframes containing 
+This module allows to manipulate the Pandas dataframes containing
 cell cycle information derived from MoMA output.
  """
 # Author: Guillaume Witz, Biozentrum Basel, 2019
@@ -12,17 +12,17 @@ import scipy.optimize
 import scipy.stats
 import trackpy
 
-from . import tools_GW as tgw
-from . import spot_detection as sp
+import tools_GW as tgw
+import spot_detection as sp
 
 def essential_props(time_mat):
     """Add basic cell cycle properties to dataframe
-    
+
     Parameters
     ----------
     time_mat : pandas dataframe
         dataframe containig cell cycle information (on row per cycle)
-    
+
     Returns
     -------
     time_mat : pandas dataframe
@@ -33,21 +33,21 @@ def essential_props(time_mat):
     time_mat['Ld'] = time_mat.length.apply(lambda x: x[-1])
     time_mat['Lb'] = time_mat.length.apply(lambda x: x[0])
     time_mat['Tb'] = time_mat.born.apply(lambda x: x if x>=0 else 0)
-    
-    time_mat['mother_id'] = time_mat.apply(lambda row: 
-                                                 int(time_mat.index[time_mat.genealogy == row.genealogy[0:-1]][0]) 
+
+    time_mat['mother_id'] = time_mat.apply(lambda row:
+                                                 int(time_mat.index[time_mat.genealogy == row.genealogy[0:-1]][0])
                                                  if len(row.genealogy[0:-1])>0 else np.nan,axis = 1)
-    
+
     return time_mat
 
 def exponential_fit(row):
     """Exponential fit for growth curve
-    
+
     Parameters
     ----------
     row : row index of dataframe. To be used with .apply(lambda row:)
-        length data     
-    
+        length data
+
     Returns
     -------
     fit_series : pandas series
@@ -69,7 +69,7 @@ def exponential_fit(row):
         pearson_lin = scipy.stats.pearsonr(xdata, ydata)[0]
         pearson_log = scipy.stats.pearsonr(xdata, np.log(ydata))[0]
 
-    fit_series =   pd.Series({'tau_fit': tau_fit, 'Lb_fit': Lb_fit,'Ld_fit': Ld_fit,'pearson_lin': pearson_lin,'pearson_log': pearson_log})  
+    fit_series =   pd.Series({'tau_fit': tau_fit, 'Lb_fit': Lb_fit,'Ld_fit': Ld_fit,'pearson_lin': pearson_lin,'pearson_log': pearson_log})
     return fit_series
 
 
@@ -77,12 +77,12 @@ def exponential_fit(row):
 def get_cell_id_time_matrix(time_mat_pd):
     """Return a matrix whose where each row corresponds to one time point (column#1)
     of a given cell cycle (defind by its index column#2)
-    
+
     Parameters
     ----------
     time_mat_pd : pandas dataframe
-        dataframe containig cell cycle information (on row per cycle)  
-    
+        dataframe containig cell cycle information (on row per cycle)
+
     Returns
     -------
     celltime : 2d numpy array
@@ -95,14 +95,14 @@ def get_cell_id_time_matrix(time_mat_pd):
 
 
 def get_long_mat(time_mat_pd):
-    """Return a matrix where each row correponds to one time point (column#1) 
+    """Return a matrix where each row correponds to one time point (column#1)
     of a given cell cycle (defined by its index column#3) and contains other information (other columns)
-    
+
     Parameters
     ----------
     time_mat_pd : pandas dataframe
-        dataframe containig cell cycle information (on row per cycle)  
-    
+        dataframe containig cell cycle information (on row per cycle)
+
     Returns
     -------
     celltime : 2d numpy array
@@ -126,18 +126,18 @@ def get_long_mat(time_mat_pd):
 
 def get_cell(time_mat_pd, cellid, mom, image = None):
     """Return the image correponding to a given MoMAobj state and cellid
-    
+
     Parameters
     ----------
     time_mat_pd : pandas dataframe
-        dataframe containig cell cycle information (on row per cycle) 
+        dataframe containig cell cycle information (on row per cycle)
     cellid : int
         dataframe numerical index
     mom : MoMAobj object
         instance of a MoMAobj
     image : 2D numpy array
         image to crop already provided
-    
+
     Returns
     -------
     cropped_image : 2d numpy array
@@ -145,12 +145,12 @@ def get_cell(time_mat_pd, cellid, mom, image = None):
     """
     if image == None:
         image = mom.load_moma_im()
-    
+
     im_size = image.shape
     im_middle = int((im_size[1]-1)/2)
-    
+
     t= mom.time-time_mat_pd.iloc[cellid]['born']
-    
+
     index1 = time_mat_pd.iloc[cellid]['pixlim'][t,0]+time_mat_pd.iloc[cellid]['tracklim']+1
     index2 = time_mat_pd.iloc[cellid]['pixlim'][t,1]+time_mat_pd.iloc[cellid]['tracklim']-1
 
@@ -159,30 +159,30 @@ def get_cell(time_mat_pd, cellid, mom, image = None):
 
 
 def find_spots(time_mat_pd, mom, sigmaXY, maxtime = None):
-    """Using a MoMAobj and the corresponding segmentation, find within each 
+    """Using a MoMAobj and the corresponding segmentation, find within each
     cell all spots.
-    
+
     Parameters
     ----------
     time_mat_pd : pandas dataframe
-        dataframe containig cell cycle information (on row per cycle) 
+        dataframe containig cell cycle information (on row per cycle)
     mom : MoMAobj object
         instance of a MoMAobj
     sigmaXY : float
         xy spot widht (stdv Gaussian model)
     maxtime : int
         maximimum time index to consider
-    
+
     Returns
     -------
     time_mat_pd : pandas dataframe
         dataframe containig cell cycle information with added key
-        spots. That key contains spot detection information in the 
+        spots. That key contains spot detection information in the
         form of a long numpy array. To understand its content use:
-        
+
         pd.DataFrame(time_mat_pd.iloc[16].spots, columns = ['x', 'y', 'A', 'b', 'A_fit', 'x_fit', 'y_fit', 'sigma_fit', 'RSS', 'xcorr', 'x_box', 'y_box', 'time','cell_time', 'x_cell', 'y_glob'])
     """
-    
+
     #set spot fitting parameters
     #sigmaXY = 1.5
     fitbox = [int(np.ceil(4*sigmaXY)),int(np.ceil(4*sigmaXY))]
@@ -194,7 +194,7 @@ def find_spots(time_mat_pd, mom, sigmaXY, maxtime = None):
 
     #create an array to store a spot list for each cell
     spots = [[] for x in time_mat_pd.index]
-    
+
     if maxtime is None:
         maxtime = mom.get_max_time()
 
@@ -220,7 +220,7 @@ def find_spots(time_mat_pd, mom, sigmaXY, maxtime = None):
         #absolute positions of spots
         abs_pos_x = (spot_mat.x+spot_mat.x_fit-spot_mat.x_box).values
         abs_pos_y = (spot_mat.y+spot_mat.y_fit-spot_mat.y_box).values
-        #cell limits 
+        #cell limits
         cell_lims = celltime[celltime[:,0]==t,:]
         #find the index of the cell to which each spot belongs
         assigned = [cell_lims[[np.logical_and(p > x[4], p < x[3]) for x in cell_lims],:] for p in abs_pos_x]
@@ -237,7 +237,7 @@ def find_spots(time_mat_pd, mom, sigmaXY, maxtime = None):
         plt.show()'''
     spots = [np.stack(x) if len(x)>0 else [] for x in spots]
     time_mat_pd['spots'] = pd.Series(spots)
-    
+
     return time_mat_pd
 
 
@@ -245,35 +245,35 @@ def find_spots(time_mat_pd, mom, sigmaXY, maxtime = None):
 def track_spots(time_mat_pd):
     """Track all spots within a cell and reconstruct trajectories
     using the trackpy package.
-    
+
     Parameters
     ----------
     time_mat_pd : pandas dataframe
-        dataframe containig cell cycle information (on row per cycle) 
-    
+        dataframe containig cell cycle information (on row per cycle)
+
     Returns
     -------
     time_mat_pd : pandas dataframe
-        dataframe containig cell cycle information with 
-        added keys with spot tracking information. In particular it 
-        has a key 'num_spots' with the number of spots belonging to 
+        dataframe containig cell cycle information with
+        added keys with spot tracking information. In particular it
+        has a key 'num_spots' with the number of spots belonging to
         full tracks per time from which the initiation is extracted
         by detecting doubling.
     """
-    
+
     time_mat_pd['spots_num'] = np.nan
     time_mat_pd['spots_num'] = time_mat_pd['spots_num'].astype(object)
     time_mat_pd['spots_tracks'] = np.nan
     time_mat_pd['spots_tracks'] = time_mat_pd['spots_tracks'].astype(object)
     time_mat_pd['full_tracks'] = np.nan
     time_mat_pd['full_tracks'] = time_mat_pd['full_tracks'].astype(object)
-    
+
     for index in time_mat_pd.index:#range(14,17):#
         if len(time_mat_pd.loc[0].spots)==0:
             continue
         unique, counts = np.unique(time_mat_pd.loc[0].spots[:,-2], return_counts=True)
         maxnumspots = np.max(counts)
-        
+
         if (time_mat_pd.iloc[index].full_cellcycle)&(maxnumspots<10):
             mother_id = time_mat_pd.iloc[index].mother_id
             if mother_id>0:
@@ -295,7 +295,7 @@ def track_spots(time_mat_pd):
                     continue
                 gdaughter1_time = time_mat_pd.iloc[gdaughter1_id]['Td']
                 gdaughter2_time = time_mat_pd.iloc[gdaughter2_id]['Td']
-                
+
                 len_mother_spots = len(time_mat_pd.iloc[mother_id]['spots'])
                 len_gdaughter_spots = len(time_mat_pd.iloc[gdaughter1_id]['spots'])
                 len_gdaughter_spots2 = len(time_mat_pd.iloc[gdaughter2_id]['spots'])
@@ -306,13 +306,13 @@ def track_spots(time_mat_pd):
                     if time_mat_pd.iloc[index].genealogy[-1]=='B':
                         sign = -1
                         displace = -1/4
-                    else: 
+                    else:
                         sign = 1
                         displace = 1/4
 
 
                     combined = np.empty((0,4))
-                    
+
                     #keep time, x, y, A and limit the time points in mothe and grand-daughters
                     mother_spots = time_mat_pd.iloc[mother_id]['spots'][:,[13,14,15,4]]
                     mother_spots=mother_spots[mother_spots[:,0]>=mother_time-10]
@@ -321,27 +321,27 @@ def track_spots(time_mat_pd):
                     gdaughter_spots=gdaughter_spots[gdaughter_spots[:,0]<5]
                     gdaughter_spots2 = time_mat_pd.iloc[gdaughter2_id]['spots'][:,[13,14,15,4]]
                     gdaughter_spots2=gdaughter_spots2[gdaughter_spots2[:,0]<5]
-                    
-                    
+
+
                     if ((len(mother_spots)==0)or(len(gdaughter_spots)==0)or(len(gdaughter_spots2)==0)):
                         continue
-                    
+
                     #create a composite spot ensemble made of mother-daugher-grand-daughters
                     #correct for positions (1/4 positions, 1/2 position etc.)
                     mother_spots = mother_spots[np.sign(mother_spots[:,1])==sign]
                     mother_spots[:,0] = mother_spots[:,0]-mother_time
                     combined = np.concatenate((combined,mother_spots))
-                    
-                    
+
+
                     daughter_spots[:,1] = daughter_spots[:,1]+displace*mother_Ld
                     combined = np.concatenate((combined,daughter_spots))
-                    
-                    
+
+
                     gdaughter_spots[:,1] = gdaughter_spots[:,1]+(displace*mother_Ld)-1/4*daughter_Ld
                     gdaughter_spots[:,0] = gdaughter_spots[:,0]+daughter_time
                     combined = np.concatenate((combined,gdaughter_spots))
-                    
-                    
+
+
                     gdaughter_spots2[:,1] = gdaughter_spots2[:,1]+(displace*mother_Ld)+1/4*daughter_Ld
                     gdaughter_spots2[:,0] = gdaughter_spots2[:,0]+daughter_time
                     combined = np.concatenate((combined,gdaughter_spots2))
@@ -361,7 +361,7 @@ def track_spots(time_mat_pd):
                         tracks.append(np.c_[[np.interp(np.arange(curr_track.frame.min(),curr_track.frame.max()+1),curr_track.frame,curr_track[key]) for key in ['frame','x','y']]].transpose())
 
                     time_mat_pd.at[index,'full_tracks'] = tracks
-                    
+
                     #limit tracks to daughter segment
                     cut_tracks = [x[(x[:,0]<daughter_time),:] for x in tracks]
                     cut_tracks = [x for x in cut_tracks if len(x)>0]
@@ -381,14 +381,14 @@ def track_spots(time_mat_pd):
 def length_fit_at_T(row, time_var):
     """To be used with an .apply(lambda row:) call. Calculate cell length
     at as specific time given by time_var key.
-    
+
     Parameters
     ----------
     row : int
         dataframe numerical index
     time_var : str
         key to use to recover time
-    
+
     Returns
     -------
     len_fit : float
@@ -404,10 +404,10 @@ def inter_initiations(row, time_mat_pd,t_var,l_var):
     """To be used with an .apply(lambda row:) call. Given an
     initiation time (t_var key) and a length variable (l_var)
     calculate the difference between mother and daughter length
-    adjusting for number of origins (this is only used for slow 
+    adjusting for number of origins (this is only used for slow
     growth so we make the approximation that if initiaion time
     was in the mother, the cell was born with two origins.)
-    
+
     Parameters
     ----------
     row : int
@@ -418,15 +418,15 @@ def inter_initiations(row, time_mat_pd,t_var,l_var):
         key to use to recover time
     l_var : str
         key to use to recover length
-    
+
     Returns
     -------
     () : tuple
         tuple containing per origin inter-initiation length and mother initiation length
     """
-    
+
     if row['mother_id']>0:
-    
+
         if (row[t_var]<0) and (time_mat_pd.loc[row['mother_id']][t_var]>0):
             L_inter_init = row[l_var]-0.5*time_mat_pd.loc[row['mother_id']][l_var]
             L_i_old = 0.5*time_mat_pd.loc[row['mother_id']][l_var]
@@ -439,13 +439,13 @@ def inter_initiations(row, time_mat_pd,t_var,l_var):
         return (L_inter_init, L_i_old)
     else:
         return (np.nan,np.nan)
-    
-    
-    
+
+
+
 def mother_var(row, time_mat_pd,var):
-    """To be used with an .apply(lambda row:) call. 
+    """To be used with an .apply(lambda row:) call.
     Return specific key of mother cell
-    
+
     Parameters
     ----------
     row : int
@@ -454,7 +454,7 @@ def mother_var(row, time_mat_pd,var):
         dataframe containig cell cycle information (on row per cycle)
     var : str
         key of variable
-    
+
     Returns
     -------
       : float
@@ -467,4 +467,4 @@ def mother_var(row, time_mat_pd,var):
             return np.nan
     else:
         return np.nan
-    
+
