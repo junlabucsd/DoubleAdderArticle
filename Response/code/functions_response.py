@@ -21,6 +21,7 @@ import matplotlib.colors as mco
 ############################################################################
 
 ### helper methods ###
+
 def histogram(X,density=True):
     valmax = np.max(X)
     valmin = np.min(X)
@@ -71,6 +72,17 @@ def autolabel(ax, rects, fontsize='small', fmt_str='{:.2f}'):
                     xytext=(0, 3),  # 3 points vertical offset
                     textcoords="offset points",
                     ha='center', va='bottom', fontsize=fontsize)
+
+def get_mean_std_logn(mu, std):
+    """
+    Return the mean and standard deviation of a log-normal distribution.
+    INPUT:
+      mu: mean of the Gaussian distribution of the log-variable.
+      std: standard deviation of the Gaussian distribution of the log-variable.
+    """
+    m = np.exp(mu+0.5*std**2)
+    s = m*np.sqrt(np.exp(std**2)-1.)
+    return m,s
 
 ### Model check ###
 
