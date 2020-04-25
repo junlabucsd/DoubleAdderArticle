@@ -5,4 +5,4 @@ doi: [10.7554/eLife.48063](https://doi.org/10.7554/eLife.48063)
 
 This repository contains a collection of notebooks that were used to re-analyze the work published by Witz et al. Please start at the notebook [response_Witz2019_index](Response/response_Witz2019_index.ipynb).
 
-Minor changes were made in the source code from Witz et al. These changes were only intended to allow more flexibility in the use of that source code, and did not alter core functions of the original study.
+Using the mybinder badge visible at the top of this Readme file, you can run an interactive version of this repository and play yourself with the data and figures.

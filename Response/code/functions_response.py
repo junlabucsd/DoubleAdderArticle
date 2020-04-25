@@ -420,7 +420,7 @@ def plot_replication_origins(df_dict, fig=None, lw=0.5, ms=2, ylim=None, fig_tit
         X = df['numori_born'].dropna().to_numpy()
         data_all.append(X)
     numori_max = np.max(np.concatenate(data_all))
-    pmax = int(np.ceil(np.log2(numori_max)))
+    pmax = int(np.ceil(np.log2(numori_max))) + 1
     ticks = [2**p for p in range(pmax+1)]
 
     for n in range(nsim):
@@ -448,9 +448,9 @@ def plot_replication_origins(df_dict, fig=None, lw=0.5, ms=2, ylim=None, fig_tit
         ax = axes[1][n]
         ax.plot(Tb, X, 'o', ms=ms, color=color)
         ax.set_xlabel('time', fontsize='medium')
-        ax.set_yticks(ticks)
         if (n == 0):
             ax.set_ylabel('# oriC at birth', fontsize='medium')
+            ax.set_yticks(ticks)
 
 
     # EXIT
