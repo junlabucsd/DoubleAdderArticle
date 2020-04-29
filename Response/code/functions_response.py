@@ -1278,7 +1278,8 @@ def add_si_fit(df):
         sd_fit = sb_fit * np.exp(lam*tau)
         si_fit = sb_fit * np.exp(lam*age_init)
 
-        df.loc[idx,['Si_fit','Sb_fit','Sd_fit']] = [si_fit, sb_fit, sd_fit]
+        df.loc[idx,['Sb_fit','Sd_fit']] = [sb_fit, sd_fit]
+        df.at[i, 'Si_fit'] = si_fit
     return
 
 def add_delta_ii(df):
