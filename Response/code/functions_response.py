@@ -15,6 +15,7 @@ import matplotlib.gridspec as mgs
 import matplotlib.cm as cm
 import matplotlib.patches as mpatches
 import matplotlib.colors as mco
+import matplotlib.ticker
 
 ############################################################################
 # functions
@@ -59,7 +60,7 @@ def get_binned(X, Y, edges):
 
     return Y_subs
 
-def autolabel(ax, rects, fontsize='small', fmt_str='{:.2f}'):
+def autolabel_vertical(ax, rects, fontsize='small', fmt_str='{:.2f}'):
     """
     Attach a text label above each bar in *rects*, displaying its height.
     From: https://matplotlib.org/3.1.1/gallery/lines_bars_and_markers/barchart.html#sphx-glr-gallery-lines-bars-and-markers-barchart-py
@@ -72,6 +73,19 @@ def autolabel(ax, rects, fontsize='small', fmt_str='{:.2f}'):
                     xytext=(0, 3),  # 3 points vertical offset
                     textcoords="offset points",
                     ha='center', va='bottom', fontsize=fontsize)
+
+def autolabel_horizontal(ax, rects, fontsize='small', fmt_str='{:.2f}'):
+    """
+    Attach a text label to the right each bar in *rects*, displaying its width.
+    """
+
+    for rect in rects:
+        width = rect.get_width()
+        ax.annotate(fmt_str.format(width),
+                    xy=(width, rect.get_y() + rect.get_height() / 2),
+                    xytext=(3, 0),  # 3 points horizontal offset
+                    textcoords="offset points",
+                    ha='left', va='center', fontsize=fontsize)
 
 def get_mean_std_logn(mu, std):
     """
@@ -896,7 +910,7 @@ def plot_simulation_single(fig, axes, data_dict, n_ind, n_tot, lw=0.5, ms=2, bar
     ylabel = 'means'
     xticks = np.arange(len(X))
     rects = ax.bar(xticks-0.5*bar_width+n_ind*bar_width/n_tot, X, bar_width/n_tot, color=color)
-    autolabel(ax, rects, fontsize='medium')
+    autolabel_vertical(ax, rects, fontsize='medium')
     ax.set_ylabel(ylabel, fontsize='large')
     ax.set_xticks(xticks)
     ax.tick_params(axis='both', length=4)
@@ -908,7 +922,7 @@ def plot_simulation_single(fig, axes, data_dict, n_ind, n_tot, lw=0.5, ms=2, bar
     ylabel = 'CVs (%)'
     xticks = np.arange(len(X))
     rects = ax.bar(xticks-0.5*bar_width+n_ind*bar_width/n_tot, X, bar_width/n_tot, color=color)
-    autolabel(ax, rects, fmt_str='{:.0f}', fontsize='medium')
+    autolabel_vertical(ax, rects, fmt_str='{:.0f}', fontsize='medium')
     ax.set_ylabel(ylabel, fontsize='large')
     ax.set_xticks(xticks)
     ax.tick_params(axis='both', length=4)
@@ -929,7 +943,7 @@ def plot_simulation_single(fig, axes, data_dict, n_ind, n_tot, lw=0.5, ms=2, bar
     xpos = xpos[idx]
     rects = ax.bar(xpos, X, bar_width/n_tot, color=color)
     bar_plots.append(rects)
-    autolabel(ax, rects, fontsize='medium')
+    autolabel_vertical(ax, rects, fontsize='medium')
     ax.set_ylabel(ylabel, fontsize='large')
     ax.set_xticks(xticks)
     ax.tick_params(axis='both', length=4)
@@ -1285,6 +1299,10 @@ def add_si_fit(df):
 def add_delta_ii(df):
     """
     Add delta_ii: added size from initiation to initiation per origin
+    This is the definition consistent with:
+      * the `cross_generation_construct` method in `decomposition.py` file.
+      * the implementation `simul_doubleadder` in `coli_simulation.py` file.
+
     """
     df['delta_ii'] = None
 
@@ -1303,6 +1321,29 @@ def add_delta_ii(df):
         mLambda_i = df.loc[idx, 'Lambda_i'].iloc[0]
 
         df.at[i, 'delta_ii'] = Lambda_i - 0.5*mLambda_i
+    # end loop on cells
+
+    return
+
+def add_delta_ii_forward(df):
+    """
+    Add delta_ii: added size from initiation to initiation per origin
+    This definition is consistent with Si & Le Treut 2019.
+    """
+    df['delta_ii_forward'] = None
+
+    for i in df.index:
+        cell_id = df.at[i, 'cell ID']
+        daughter_id = df.at[i, 'daughter ID']
+        Lambda_i = df.at[i, 'Lambda_i']
+
+        idx = df['cell ID'] == daughter_id
+        if np.sum(idx.to_list()) != 1:
+            continue
+
+        dLambda_i = df.loc[idx, 'Lambda_i'].iloc[0]
+
+        df.at[i, 'delta_ii_forward'] = dLambda_i - 0.5*Lambda_i
     # end loop on cells
 
     return
@@ -1435,6 +1476,127 @@ def add_delta_id_method3(df):
     # end loop on cells
     return
 
+def get_seq(df, cid, field, tid=None):
+    """
+    Return the divisions ratio from initiator generation to current generation.
+    """
+    # initialize
+    idx = df['cell ID'] == cid
+    if np.sum(idx.to_list()) != 1:
+        raise ValueError("There should be exactly one matching cell")
+    mid = df.loc[idx, 'mother ID'].iloc[0]
+    val = df.loc[idx, field].iloc[0]
+
+    if (tid is None):
+        tid = df.loc[idx, 'initiator ID'].iloc[0]
+
+    res = [val]
+    while (cid != tid):
+        cid = mid
+
+        idx = df['cell ID'] == cid
+        if np.sum(idx.to_list()) != 1:
+            raise ValueError("There should be exactly one matching cell")
+
+        mid = df.loc[idx, 'mother ID'].iloc[0]
+        val = df.loc[idx, field].iloc[0]
+        res.append(val)
+
+    # sort from older to current generation
+    res.reverse()
+    return res
+
+def add_allvariables(df):
+    """
+    This method add all physiological variables that will be used in the determinant scoring analysis.
+    """
+
+    columns = [
+            'Si', \
+            'Delta_bi', \
+            'R_bd', \
+            'R_bi', \
+            'tau_ii', \
+            'R_ii', \
+            'R_id'
+              ]
+    for col in columns:
+        df[col]=np.nan
+
+
+    for i in df.index:
+        cid = df.at[i, 'cell ID']
+        mid = df.at[i, 'mother ID']
+        iid = df.at[i, 'initiator ID']
+        nori_init = df.at[i, 'nori init']
+        Lambda_i = df.at[i, 'Lambda_i']
+        sd = df.at[i,'Sd']
+        sb = df.at[i,'Sb']
+
+        hasinit = not (iid is None)
+        # initiation size
+        if hasinit:
+            Si = Lambda_i*nori_init
+            df.at[i, 'Si'] = Si
+
+        # Added size from birth to initiation
+        if hasinit:
+            res = get_seq(df, cid, 'Sb')
+            sb_init = res[0]
+
+            Delta_bi = Si - sb_init
+            df.at[i,'Delta_bi'] = Delta_bi
+
+        # division-to-birth ratio
+        R_bd = sd/sb
+        df.at[i, 'R_bd'] = R_bd
+
+        # initiation-to-birth ratio
+        if hasinit:
+            R_bi = Si/sb_init
+            df.at[i, 'R_bi'] = R_bi
+
+        # initiation-to-initiation duration
+        mhasinit = False
+        if not (mid is None):
+            idx = df['cell ID'] == mid
+            if np.sum(idx.to_list()) != 1:
+                raise ValueError("There should be exactly one mother cell")
+            miid = df.loc[idx, 'initiator ID'].iloc[0]
+            mhasinit = not (miid is None)
+        if hasinit and mhasinit:
+            ## age at initiation
+            Bs = get_seq(df, cid, 'initiator B', mid)
+            mB, B = Bs
+
+            taus = get_seq(df, iid, 'tau', miid)
+            taus[0] = taus[0] - mB # subtract B period in mother initiator cell
+            taus[-1] = B            # only count until initiation happens in current initiator cell
+
+            ## total duration from previous initiation to current initiation
+            tau_ii = np.sum(taus)
+            df.at[i, 'tau_ii'] = tau_ii
+
+        # division to initiation ratio
+        R_id = sd / Lambda_i
+        df.at[i, 'R_id'] = R_id
+
+        # initiation to initiation ratio
+        if not (mid is None):
+            idx = df['cell ID'] == mid
+            if np.sum(idx.to_list()) != 1:
+                raise ValueError("There should be exactly one mother cell")
+
+            mLambda_i = df.loc[idx, 'Lambda_i'].iloc[0]
+            R_ii = 2*Lambda_i / mLambda_i   # factor of 2 so that there is an exponential fit
+                                            # from previous to current initiation
+            df.at[i, 'R_ii'] = R_ii
+
+    # add other specific variables
+    add_delta_ii_forward(df)
+
+    return df
+
 class ResultStruct:
     def __init__(self):
         self.x = None
@@ -1474,3 +1636,80 @@ def fit_lognormal_fsglt(xdata_, fit_range):
 
 
     return fit_normal_fsglt(np.log(xdata), fit_range)
+
+
+def compute_determinant(mat):
+    """
+    See decomposition.py
+    line 149
+
+    INPUT
+    -----
+        mat: matrix where each row is the list of observations for one variable.
+    """
+
+    K = np.cov(mat)
+    return np.linalg.det(K)/np.prod(np.diag(K))
+
+def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, figsize=None, fmt_str='{:.4f}'):
+    """
+    This function plots the determinant values in the table
+    """
+
+    fig = plt.figure(num='none', facecolor='w',figsize=figsize)
+    ax = fig.gca()
+    ax.tick_params(bottom=True, left=True, labelbottom=True, labelleft=True)
+    ax.tick_params(axis='both', which='both', length=4)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_smart_bounds(True)
+    ax.spines['bottom'].set_smart_bounds(True)
+
+
+    labels = []
+    values = []
+    if nval is None:
+        nval = len(table)
+    for i in range(nval):
+        thevars = [label_mapping[v] for v in table[i][:-1]]
+        labels.append(", ".join(thevars))
+        values.append(table[i][-1])
+
+    Y = np.arange(nval)
+    rects = ax.barh(Y, values, align='center')
+    autolabel_horizontal(ax, rects, fontsize='medium', fmt_str=fmt_str)
+    ax.set_yticks(Y)
+    ax.set_yticklabels(labels,fontsize='medium')
+    ax.invert_yaxis()
+    ax.set_xlabel("I value", fontsize='medium')
+    ax.set_xlim(0.,1.)
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    #set_xticks(np.arange(11, dtype=np.float_)/10)
+
+    rect=[0.,0.,1.,0.99]
+    fig.tight_layout(rect=rect)
+    if not fig_title is None:
+        fig.suptitle(fig_title, fontsize='large', x=0.5, ha='center')
+    return fig
+
+
+def load_table(fpath):
+    """
+    Load table of determinant analysis
+    """
+    table = []
+    with open(fpath,'r') as fin:
+        fin.readline()  # pass first line
+        while True:
+            line = fin.readline()
+            if line == "":
+                break
+            if line == '\n':
+                break
+            tab = line.split()
+            tab[-1] = float(tab[-1])
+            table.append(tab)
+    return table
+
+
