@@ -281,7 +281,7 @@ def plot_model_check(data_dict, binw_dict=None, \
     ax.plot(Ld_fit, Ld_fit, 'r--', lw=lw)
     ax.set_aspect('equal')
     xlabel='$L_d$'
-    ylabel='$N_\\mathrm{initial} \left( \Lambda_i + 2 \delta_{id} \\right)$'
+    ylabel='$\Lambda_i + 2 \delta_{id}$'
     ax.set_xlabel(xlabel, fontsize='large')
     ax.set_ylabel(ylabel, fontsize='large')
     ax.set_title("Division size", fontsize='large')
@@ -387,136 +387,6 @@ def plot_model_check(data_dict, binw_dict=None, \
     if not fig_title is None:
         fig.suptitle(fig_title,fontsize='x-large', x=0.5, ha='center')
     gs.tight_layout(fig, rect=[0.,0.,1.,0.93])
-    return fig
-
-### Replication origin homeostasis  re-analysis ###
-def plot_replication_origins(df_dict, fig=None, lw=0.5, ms=2, ylim=None, fig_title=None):
-    """
-    Method used to plot information of replication origin homeostasis in simulations.
-
-    """
-    nsim = len(df_dict)
-
-    # MAKE THE FIGURE
-    if fig is None:
-        figsize=(3*nsim,3*2)
-        fig = plt.figure(num='none', facecolor='w',figsize=figsize)
-
-    axes = []
-    gs = mgs.GridSpec(2, nsim, hspace=0.1)
-    for i in range(2):
-        row = []
-        ax = fig.add_subplot(gs[i,0])
-        row.append(ax)
-        for j in range(1,nsim):
-            ax = fig.add_subplot(gs[i,j], sharey=row[0])
-            row.append(ax)
-        axes.append(row)
-    for i in range(len(axes)):
-        for j in range(nsim):
-            ax = axes[i][j]
-            ax.tick_params(length=4, bottom=True, left=True, labelbottom=True, labelleft=True)
-            ax.spines['top'].set_visible(False)
-            ax.spines['right'].set_visible(False)
-            if (j > 0):
-                ax.spines['left'].set_visible(False)
-                ax.tick_params(left=False, labelleft=False)
-
-    # make the plot
-    noris = list(df_dict.keys())
-    noris.sort()
-    data_all = []
-    for n in range(nsim):
-        nori = noris[n]
-        df = df_dict[nori]['df']
-
-        columns = ['numori_born']
-        X = df['numori_born'].dropna().to_numpy()
-        data_all.append(X)
-    numori_max = np.max(np.concatenate(data_all))
-    pmax = int(np.ceil(np.log2(numori_max))) + 1
-    ticks = [2**p for p in range(pmax+1)]
-
-    for n in range(nsim):
-        nori = noris[n]
-        df = df_dict[nori]['df']
-        color = df_dict[nori]['color']
-
-        columns = ['born', 'numori_born', 'Ld_fit']
-        data = df.loc[:,columns].dropna().to_numpy()
-        Tb, X, Ld = data.T
-
-        # plot the histogram
-        bins = np.arange(2**pmax+1)
-        hist, edges = np.histogram(X, bins=bins, density=False)
-        ax = axes[0][n]
-        ax.bar(edges[:-1], hist, np.diff(edges), color=color)
-        ax.set_xlabel('# oriC at birth', fontsize='medium')
-        ax.set_xticks(ticks)
-        if (n == 0):
-            ax.set_ylabel('cell count', fontsize='medium')
-        ax.set_title("nori_init = {:d}".format(nori), fontsize='medium')
-
-
-        # plot time trace
-        ax = axes[1][n]
-        ax.plot(Tb, X, 'o', ms=ms, color=color)
-        ax.set_xlabel('time', fontsize='medium')
-        if (n == 0):
-            ax.set_ylabel('# oriC at birth', fontsize='medium')
-            ax.set_yticks(ticks)
-
-
-    # EXIT
-    fig.suptitle(fig_title, fontsize='x-large', x=0.5, ha='center')
-    gs.tight_layout(fig, rect=[0.,0.,1.,0.95])
-    return fig
-
-def plot_overlay_sd(df_dict, fig=None, lw=0.5, ms=2, ylim=None, fig_title=None):
-    """
-    Method used to plot an overlay of the distribution of cell size at division
-
-    """
-    nsim = len(df_dict)
-
-    # MAKE THE FIGURE
-    if fig is None:
-        figsize=(4,4)
-        fig = plt.figure(num='none', facecolor='w',figsize=figsize)
-
-        ax = fig.gca()
-        ax.tick_params(length=4, bottom=True, left=True, labelbottom=True, labelleft=True)
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-
-    # make the plot
-    noris = list(df_dict.keys())
-    noris.sort()
-    for n in range(nsim):
-        nori = noris[n]
-        df = df_dict[nori]['df']
-        label = df_dict[nori]['label']
-        color = df_dict[nori]['color']
-        if 'binw' in df_dict[nori]:
-            binw = df_dict[nori]['binw']
-        else:
-            binw = None
-
-        columns = ['born', 'numori_born', ]
-        Ld = df['Ld_fit'].dropna().to_numpy()
-        edges = make_binning_edges(Ld, binw=binw)
-        hist, edges = np.histogram(Ld, bins=edges, density=True)
-        X = 0.5*(edges[:-1]+edges[1:])
-
-        # plot the histogram
-        ax.plot(X, hist, '-', lw=lw, color=color, label=label)
-
-    ax.set_xlabel('$S_d$', fontsize='medium')
-    ax.set_ylabel('pdf', fontsize='medium')
-
-    # EXIT
-    fig.suptitle(fig_title, fontsize='x-large', x=0.5, ha='center')
-    fig.tight_layout(rect=[0.,0.,1.,0.95])
     return fig
 
 ### Figure 5 re-analysis ###
