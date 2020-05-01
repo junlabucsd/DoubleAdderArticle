@@ -1341,9 +1341,9 @@ def add_delta_ii_forward(df):
         if np.sum(idx.to_list()) != 1:
             continue
 
-        dLambda_i = df.loc[idx, 'Lambda_i'].iloc[0]
+        Lambda_i_f = df.loc[idx, 'Lambda_i'].iloc[0]
 
-        df.at[i, 'delta_ii_forward'] = dLambda_i - 0.5*Lambda_i
+        df.at[i, 'delta_ii_forward'] = Lambda_i_f - 0.5*Lambda_i
     # end loop on cells
 
     return
@@ -1516,17 +1516,21 @@ def add_allvariables(df):
             'Delta_bi', \
             'R_bd', \
             'R_bi', \
-            'tau_ii', \
-            'R_ii', \
-            'R_id'
+            'R_ii_b', \
+            'R_ii_f', \
+            'R_id', \
+            'Lambda_i_b', \
+            'Lambda_i_f', \
+            'tau_ii_b', \
+            'tau_ii_f', \
               ]
     for col in columns:
-        df[col]=np.nan
-
+        df[col]=None
 
     for i in df.index:
         cid = df.at[i, 'cell ID']
         mid = df.at[i, 'mother ID']
+        did = df.at[i, 'daughter ID']
         iid = df.at[i, 'initiator ID']
         nori_init = df.at[i, 'nori init']
         Lambda_i = df.at[i, 'Lambda_i']
@@ -1534,29 +1538,36 @@ def add_allvariables(df):
         sb = df.at[i,'Sb']
 
         hasinit = not (iid is None)
-        # initiation size
-        if hasinit:
-            Si = Lambda_i*nori_init
+        idx = df['initiator ID'] == cid
+        if np.sum(idx.to_list()) == 1:  # if there is exactly one initiation
+            # initiation size if there is initiation in current generation
+            Si = df.loc[idx, 'nori init'].iloc[0] * df.loc[idx, 'Lambda_i'].iloc[0]
             df.at[i, 'Si'] = Si
 
-        # Added size from birth to initiation
-        if hasinit:
-            res = get_seq(df, cid, 'Sb')
-            sb_init = res[0]
-
-            Delta_bi = Si - sb_init
+            # Added size from birth to initiation
+            Delta_bi = Si - sb
             df.at[i,'Delta_bi'] = Delta_bi
+
+            # initiation-to-birth ratio
+            if hasinit:
+                R_bi = Si/sb
+                df.at[i, 'R_bi'] = R_bi
 
         # division-to-birth ratio
         R_bd = sd/sb
         df.at[i, 'R_bd'] = R_bd
 
-        # initiation-to-birth ratio
-        if hasinit:
-            R_bi = Si/sb_init
-            df.at[i, 'R_bi'] = R_bi
+        # initiation size per ori in previous and next replication cycle
+        if not (mid is None):
+            idx = df['cell ID'] == mid
+            if np.sum(idx.to_list()) == 1:
+                df.at[i, 'Lambda_i_b'] = df.loc[idx, 'Lambda_i'].iloc[0]
+        if not (did is None):
+            idx = df['cell ID'] == did
+            if np.sum(idx.to_list()) == 1:
+                df.at[i, 'Lambda_i_f'] = df.loc[idx, 'Lambda_i'].iloc[0]
 
-        # initiation-to-initiation duration
+        # initiation-to-initiation duration -- backward
         mhasinit = False
         if not (mid is None):
             idx = df['cell ID'] == mid
@@ -1575,22 +1586,49 @@ def add_allvariables(df):
 
             ## total duration from previous initiation to current initiation
             tau_ii = np.sum(taus)
-            df.at[i, 'tau_ii'] = tau_ii
+            df.at[i, 'tau_ii_b'] = tau_ii
+
+        # initiation-to-initiation duration -- forward
+        dhasinit = False
+        if not (did is None):
+            idx = df['cell ID'] == did
+            if np.sum(idx.to_list()) == 1:
+                diid = df.loc[idx, 'initiator ID'].iloc[0]
+                dhasinit = not (diid is None)
+        if hasinit and dhasinit:
+            ## age at initiation
+            Bs = get_seq(df, did, 'initiator B', cid)
+            mB, B = Bs
+
+            taus = get_seq(df, diid, 'tau', iid)
+            taus[0] = taus[0] - mB # subtract B period in mother initiator cell
+            taus[-1] = B            # only count until initiation happens in current initiator cell
+
+            ## total duration from previous initiation to current initiation
+            tau_ii = np.sum(taus)
+            df.at[i, 'tau_ii_f'] = tau_ii
 
         # division to initiation ratio
         R_id = sd / Lambda_i
         df.at[i, 'R_id'] = R_id
 
-        # initiation to initiation ratio
+        # initiation to initiation ratio -- backward
         if not (mid is None):
             idx = df['cell ID'] == mid
             if np.sum(idx.to_list()) != 1:
                 raise ValueError("There should be exactly one mother cell")
 
             mLambda_i = df.loc[idx, 'Lambda_i'].iloc[0]
-            R_ii = 2*Lambda_i / mLambda_i   # factor of 2 so that there is an exponential fit
+            df.at[i, 'R_ii_b'] = 2*Lambda_i / mLambda_i   # factor of 2 so that there is an exponential fit
                                             # from previous to current initiation
-            df.at[i, 'R_ii'] = R_ii
+
+        # initiation to initiation ratio -- forward
+        if not (did is None):
+            idx = df['cell ID'] == did
+            if np.sum(idx.to_list()) == 1:
+                Lambda_i_f = df.loc[idx, 'Lambda_i'].iloc[0]
+                df.at[i, 'R_ii_f'] = 2*Lambda_i_f / Lambda_i   # factor of 2 so that there is an exponential fit
+                                                # from previous to current initiation
 
     # add other specific variables
     add_delta_ii_forward(df)
@@ -1651,7 +1689,7 @@ def compute_determinant(mat):
     K = np.cov(mat)
     return np.linalg.det(K)/np.prod(np.diag(K))
 
-def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, figsize=None, fmt_str='{:.4f}'):
+def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, figsize=None, fmt_str='{:.4f}', specials=[], color_default='black', color_special='red'):
     """
     This function plots the determinant values in the table
     """
@@ -1668,15 +1706,24 @@ def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, 
 
     labels = []
     values = []
+    colors = []
     if nval is None:
         nval = len(table)
     for i in range(nval):
-        thevars = [label_mapping[v] for v in table[i][:-1]]
+        comb = table[i][:-1]
+        thevars = [label_mapping[v] for v in comb]
         labels.append(", ".join(thevars))
         values.append(table[i][-1])
+        color = color_default
+        for sp_comb in specials:
+            if set(sp_comb) == set(comb):
+                color = color_special
+                print("Found special combination!")
+                break
+        colors.append(color)
 
     Y = np.arange(nval)
-    rects = ax.barh(Y, values, align='center')
+    rects = ax.barh(Y, values, color=colors, align='center')
     autolabel_horizontal(ax, rects, fontsize='medium', fmt_str=fmt_str)
     ax.set_yticks(Y)
     ax.set_yticklabels(labels,fontsize='medium')
@@ -1693,6 +1740,55 @@ def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, 
         fig.suptitle(fig_title, fontsize='large', x=0.5, ha='center')
     return fig
 
+def plot_Ivalues_all(table, lw=0.5, ms=1, fig_title=None, figsize=None, fmt_str='{:.4f}', specials=[], color_default='black', color_special='red'):
+    """
+    This function plots the determinant values in the table
+    """
+
+    fig = plt.figure(num='none', facecolor='w',figsize=figsize)
+    ax = fig.gca()
+    ax.tick_params(bottom=True, left=True, labelbottom=True, labelleft=True)
+    ax.tick_params(axis='both', which='both', length=4)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_smart_bounds(True)
+    ax.spines['bottom'].set_smart_bounds(True)
+
+
+    values_default = []
+    values_special = []
+    colors = []
+    nval = len(table)
+    for i in range(nval):
+        comb = table[i][:-1]
+        val = table[i][-1]
+        isdefault=True
+        for sp_comb in specials:
+            if set(sp_comb) == set(comb):
+                isdefault=False
+                print("Found special combination!")
+                break
+        if isdefault:
+            values_default.append(val)
+            values_special.append(None)
+        else:
+            values_default.append(None)
+            values_special.append(val)
+
+    X = np.arange(nval)
+    ax.plot(X, values_default, 'o', color=color_default)
+    ax.plot(X, values_special, 'o', ms=4*ms, color=color_special)
+    ax.set_ylabel("I value", fontsize='medium')
+    ax.set_ylim(0.,1.)
+    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    #set_xticks(np.arange(11, dtype=np.float_)/10)
+
+    rect=[0.,0.,1.,0.99]
+    fig.tight_layout(rect=rect)
+    if not fig_title is None:
+        fig.suptitle(fig_title, fontsize='large', x=0.5, ha='center')
+    return fig
 
 def load_table(fpath):
     """
