@@ -38,18 +38,27 @@ def simul_doubleadder(nbstart, run_time, params, name, nori_init=1):
     #standard value of growth rate. Used to scale the noise appropriately
     normval = np.exp(params['tau_logn_mu'])
 
+    # make sure the number of oriC is a power of 2
+    ncycle = np.log2(nori_init)
+    if np.floor(ncycle) != ncycle:
+        raise ValueError("nori_init must be a power of 2")
+    ncycle = int(ncycle)
+
     #initialize the inter-initiation adder (exact procedure doesn't really matter here)
     #as all cells start with n_ori = 1, there's no initiation to division adder running
     DLi = np.random.normal(params['DLi_mu'], params['DLi_sigma'], size=nbstart)*nori_init
+
+    # initialize on-going initiation-to-division adders
+    DLdLi = nori_init*np.exp(np.random.normal(params['DLdLi_logn_mu'], params['DLdLi_logn_sigma'], size=nbstart))
+    DLdLi_init = [[ [DLdLi[x]*(1-float(i+1)/float(ncycle)), DLdLi[x]] for i in range(ncycle)] for x in range(nbstart)]
 
     #initialize cell infos as a list of dictionaries. All cells start with n_ori = 1
     cells = {}
     for x in range(nbstart):
         dict1 = {'Lb': L0[x],'L':L0[x], 'gen': str(x), 'tau':tau[x], 'Lt': [[0,L0[x],1]], 'finish': False,
-                'born':0, 'DLi': [[0,DLi[x]]],'DLdLi': [],'Li':[],'Ti':[],
+                'born':0, 'DLi': [[0,DLi[x]]]*(ncycle+1),'DLdLi': DLdLi_init[x],'Li':[np.nan]*ncycle,'Ti':[np.nan]*ncycle,
                 'numori': nori_init,'Ld':np.nan, 'numori_born': nori_init,'name': name,'mLi':np.nan, 'mLd':np.nan, 'rfact':0.5}
         cells[str(x)] = dict1
-
 
     for t in range(run_time):
 
@@ -57,7 +66,6 @@ def simul_doubleadder(nbstart, run_time, params, name, nori_init=1):
 
         for x in cells:
             if cells[x]['finish']==False:
-
 
                 #update cell size
                 cells[x]['L'] = cells[x]['L']*(2**(1/cells[x]['tau']))
@@ -188,9 +196,19 @@ def simul_growth_dinter_classicadder(nbstart, run_time, params, name, nori_init=
     #standard value of growth rate. Used to scale the noise appropriately
     normval = np.exp(params['tau_logn_mu'])
 
+    # make sure the number of oriC is a power of 2
+    ncycle = np.log2(nori_init)
+    if np.floor(ncycle) != ncycle:
+        raise ValueError("nori_init must be a power of 2")
+    ncycle = int(ncycle)
+
     #initialize the inter-initiation adder (exact procedure doesn't really matter here)
     #as all cells start with n_ori = 1, there's no initiation to division adder running
     DLi = np.random.normal(params['DLi_mu'], params['DLi_sigma'], size=nbstart)*nori_init
+
+    # initialize on-going initiation-to-division adders
+    DLdLi = nori_init*np.exp(np.random.normal(params['DLdLi_logn_mu'], params['DLdLi_logn_sigma'], size=nbstart))
+    DLdLi_init = [[ [0., 0.] for i in range(ncycle)] for x in range(nbstart)]
 
     #initialize classic adder
     dL = np.random.normal(params['dL_mu'], params['dL_sigma'], size=nbstart)
@@ -199,8 +217,8 @@ def simul_growth_dinter_classicadder(nbstart, run_time, params, name, nori_init=
     cells = {}
     for x in range(nbstart):
         dict1 = {'Lb': L0[x],'L':L0[x], 'gen': str(x), 'tau':tau[x], 'Lt': [[0,L0[x],1]], 'finish': False,
-                'born':0, 'DLi': [[0,DLi[x]]]*nori_init,'DLdLi': [[0,1]]*(nori_init-1),'Li':[0]*nori_init,'Ti':[0]*nori_init, 'dL': [0,dL[x]],
-                'numori': nori_init, 'Ld':np.nan, 'numori_born': nori_init,'name': name,'mLi':np.nan, 'mLd':np.nan, 'rfact':0.5}
+                'born':0, 'DLi': [[0,DLi[x]]]*(ncycle+1),'DLdLi': DLdLi_init[x],'Li':[np.nan]*ncycle,'Ti':[np.nan]*ncycle, 'dL': [0,dL[x]],
+                'numori': nori_init,'Ld':np.nan, 'numori_born': nori_init,'name': name,'mLi':np.nan, 'mLd':np.nan, 'rfact':0.5}
         cells[str(x)] = dict1
 
 
