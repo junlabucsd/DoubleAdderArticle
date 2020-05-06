@@ -1048,25 +1048,13 @@ def process_gw(df, time_scale, fitting=False):
     # remove some columns
     del df['full_cellcycle']
     del df['pearson_log']
+    del df['Ld_fit']
+    del df['Lb_fit']
     del df['Li_old']
     del df['Li']
     del df['Li_fit']
-    #df.rename(columns={'Li_fit': 'Lambda_i'}, inplace=True)
-    #df.rename(columns={'Li': 'Lambda_i'}, inplace=True)
     #del df['period']
     del df['born']
-
-    # rename dimensions
-    if fitting:
-        del df['Ld']
-        del df['Lb']
-        df.rename(columns={'Lb_fit': 'Sb', 'Ld_fit': 'Sd'}, inplace=True)
-    else:
-        del df['Ld_fit']
-        del df['Lb_fit']
-        df.rename(columns={'Lb': 'Sb', 'Ld': 'Sd'}, inplace=True)
-    df['Delta_bd'] = None
-    df.loc[:, 'Delta_bd'] = df.loc[:, 'Sd'] - df.loc[:, 'Sb']
 
     # create cell ID field from index
     df.reset_index(level=0, inplace=True)
@@ -1093,15 +1081,27 @@ def process_gw(df, time_scale, fitting=False):
     df.loc[:, 'lambda'] = df.loc[:, 'tau_fit'].apply(func)
     df.rename(columns={'tau_fit': 'tau_eff'}, inplace=True)
 
+    # rename dimensions
+    if fitting:
+        print("Using fitted dimensions...")
+        add_length_fit(df, time_scale)
+        # remove unfitted values
+        del df['Ld']
+        del df['Lb']
+        del df['length']
+        del df['lambda']
+        df.rename(columns={'lambda_fit': 'lambda', 'Sb_fit': 'Sb', 'Sd_fit': 'Sd', 'length_fit': 'length'}, inplace=True)
+    else:
+        df.rename(columns={'Lb': 'Sb', 'Ld': 'Sd'}, inplace=True)
+    df['Delta_bd'] = None
+    df.loc[:, 'Delta_bd'] = df.loc[:, 'Sd'] - df.loc[:, 'Sb']
+
     # add septum positioning
     add_phi(df)
 
     # add initiation information
     add_initiation(df)
-    if fitting:
-        raise ValueError("Need to be coded!")
-    else:
-        add_Lambda_i(df, time_scale)
+    add_Lambda_i(df, time_scale)
     del df['length']
     add_si_fit(df)
 
@@ -1175,6 +1175,49 @@ def backtrack_initiation(mydf, cell_id):
 
     return backtrack_time(mydf, cell_id, taucyc)
 
+def add_length_fit(df, time_scale):
+    """
+    use the `length` field to re-do the fits
+
+    """
+    cols = ['lambda_fit', 'Sb_fit', 'Sd_fit', 'length_fit']
+    for col in cols:
+        if col in df.columns:
+            del df[col]
+        df[col] = None
+
+    for i in df.index:
+        Y = df.at[i,'length']
+
+        npts = len(Y)
+        X = np.arange(npts)
+
+        if np.any(~np.isfinite(Y)):
+            continue
+
+        if npts < 2:
+            raise ValueError("Some cells have less than 2 points per generation!")
+
+        sy = np.max(Y) - np.min(Y)
+        Y = Y / sy
+        a,b = np.polyfit(X, np.log(Y), deg=1)
+
+        tau = df.at[i,'tau']
+        if int(tau/float(time_scale)) != npts:
+            raise ValueError("Wrong time scale!")
+
+        lambda_fit = a/time_scale
+        sb_fit = sy*np.exp(b)
+        #sd_fit = sb_fit * np.exp(a*(npts-1))   # this is more reasonable to me.
+        sd_fit = sb_fit * np.exp(a*npts)        # this is the method from Witz et al.
+
+        df.at[i,'lambda_fit'] = lambda_fit
+        df.at[i,'Sb_fit'] = sb_fit
+        df.at[i,'Sd_fit'] = sd_fit
+        df.at[i,'length_fit'] = sy*np.exp(a*X+b)
+
+    return
+
 def add_mother_id(df):
     df['mother ID'] = None
 
@@ -1247,8 +1290,8 @@ def add_si_fit(df):
     Add the fitted size at initiation using information on initiation
     """
     df['Si_fit'] = None
-    df['Sb_fit'] = None
-    df['Sd_fit'] = None
+#    df['Sb_fit'] = None
+#    df['Sd_fit'] = None
 
     for i in df.index:
         init_id = df.at[i,'initiator ID']
@@ -1262,6 +1305,9 @@ def add_si_fit(df):
 
         # start the fit
         lam, sb, sd, tau = df.loc[idx, ['lambda','Sb','Sd','tau']].iloc[0].to_numpy()
+        if lam is None:
+            # happens when number of points for fit was less than the minimum
+            continue
         #print(i, df.at[i,'cell ID'], init_id, lam, sb, sd, age_init, tau)
         ## The fitted function is f(t) = sb_fit exp(lambda . t)
         ## sb_fit is determined so as to minimize (f(0) - sb)^2 + (f(tau) - sd)^2
@@ -1271,7 +1317,7 @@ def add_si_fit(df):
         sd_fit = sb_fit * np.exp(lam*tau)
         si_fit = sb_fit * np.exp(lam*age_init)
 
-        df.loc[idx,['Sb_fit','Sd_fit']] = [sb_fit, sd_fit]
+#        df.loc[idx,['Sb_fit','Sd_fit']] = [sb_fit, sd_fit]
         df.at[i, 'Si_fit'] = si_fit
     return
 
@@ -1298,6 +1344,9 @@ def add_Lambda_i(df, time_scale):
 
         # get the length table
         lengths = df.loc[idx,'length'].iloc[0]
+        if lengths is None:
+            # happens when number of points for fit was less than the minimum
+            continue
         npts = len(lengths)
 
         tau = df.loc[idx, 'tau'].iloc[0]
@@ -1333,7 +1382,10 @@ def add_delta_ii(df, gw=False):
 
         idx = df['cell ID'] == mother_id
         if np.sum(idx.to_list()) != 1:
-            raise ValueError("There should be exactly one mother cell")
+            if gw:
+                continue
+            else:
+                raise ValueError("There should be exactly one mother cell")
 
         mLambda_i = df.loc[idx, 'Lambda_i'].iloc[0]
 
@@ -1408,23 +1460,21 @@ def add_delta_id_method2(df):
         init_id = df.at[i, 'initiator ID']
         nori_init = df.at[i, 'nori init']
         Lambda_i = df.at[i, 'Lambda_i']
+        sb = df.at[i, 'Sb']
+        sd = df.at[i, 'Sd']
 
         if init_id is None:
             continue
 
         # initialize
-        idx = df['cell ID'] == cell_id
-        if np.sum(idx.to_list()) != 1:
-            raise ValueError("There should be exactly one such cell")
-
-        sb, sd = df.loc[idx, ['Sb', 'Sd']].iloc[0].to_numpy()
         cml_size = sd
+        current_id = cell_id
+        idx = df['cell ID'] == current_id
+        rfact=1.
 
         # start loop
         count=0
         count_MAX=5
-        current_id = cell_id
-        rfact=1.
         while (current_id != init_id):
             cml_size -= sb*rfact
             rfact/=2.
@@ -1443,7 +1493,12 @@ def add_delta_id_method2(df):
             if count > count_MAX:
                 raise ValueError("Trapped in infinite loop")
         # end loop
-        cml_size -= Lambda_i*nori_init*rfact
+        try:
+            cml_size -= Lambda_i*nori_init*rfact
+        except TypeError:
+            print(Lambda_i, nori_init, rfact)
+            raise ValueError
+
         cml_size *= 0.5
         df.at[i, delta_key] = cml_size
     # end loop on cells
@@ -1476,15 +1531,13 @@ def add_delta_id_method3(df):
             continue
 
         # initialize
-        idx = df['cell ID'] == cell_id
-        if np.sum(idx.to_list()) != 1:
-            raise ValueError("There should be exactly one such cell")
-
         rfact = 1.
+        current_id = cell_id
+        idx = df['cell ID'] == current_id
+
         # start loop
         count=0
         count_MAX=5
-        current_id = cell_id
         while (current_id != init_id):
             current_id = df.loc[idx, 'mother ID'].iloc[0]
 
@@ -1506,6 +1559,9 @@ def add_delta_id_method3(df):
     return
 
 def add_Si(df):
+    """
+    If there is initiation of replication in the current generation, record it.
+    """
     col = 'Si'
     if col in df.columns:
         del df[col]
@@ -1514,7 +1570,9 @@ def add_Si(df):
         cid = df.at[i, 'cell ID']
 
         idx = df['initiator ID'] == cid
-        if np.sum(idx.to_list()) == 1:  # if there is exactly one initiation
+        if np.sum(idx.to_list()) >= 1:  # cell is responsible for at least 1 division
+            # note: if there are 2 replication initiations in the current generation,
+            #       this method will pick one or the other.
             # initiation size if there is initiation in current generation
             Si = df.loc[idx, 'nori init'].iloc[0] * df.loc[idx, 'Lambda_i'].iloc[0]
             df.at[i, col] = Si
@@ -1631,6 +1689,7 @@ def add_tau_ii_b(df, gw=False):
         idx = df['cell ID'] == mid
         if np.sum(idx.to_list()) != 1:
             continue
+
         miid = df.loc[idx, 'initiator ID'].iloc[0]
         if miid is None:
             continue
@@ -1724,7 +1783,10 @@ def add_R_ii_b(df, gw=False):
 
         idx = df['cell ID'] == mid
         if np.sum(idx.to_list()) != 1:
-            raise ValueError("There should be exactly one mother cell")
+            if gw:
+                continue
+            else:
+                raise ValueError("There should be exactly one mother cell")
 
         Lambda_i_b = df.loc[idx, 'Lambda_i'].iloc[0]
 
@@ -1753,7 +1815,7 @@ def add_R_ii_f(df, gw=False):
             continue
 
         idx = df['cell ID'] == did
-        if np.sum(idx.to_list()) < 1:
+        if np.sum(idx.to_list()) != 1:
             continue
 
         Lambda_i_f = df.loc[idx, 'Lambda_i'].iloc[0]
@@ -1812,142 +1874,6 @@ def add_allvariables(df, gw=False):
     add_R_ii_f(df, gw)
     add_delta_ii_forward(df, gw)
 
-#    columns = [
-#            v'Si', \
-#            v'Delta_bi', \
-#            v'R_bd', \
-#            v'R_bi', \
-#            v'R_ii_b', \
-#            v'R_ii_f', \
-#            v'R_id', \
-#            v'Lambda_i_b', \
-#            v'Lambda_i_f', \
-#            v'tau_ii_b', \
-#            v'tau_ii_f', \
-#              ]
-#    for col in columns:
-#        df[col]=None
-#    for i in df.index:
-#        cid = df.at[i, 'cell ID']
-#        mid = df.at[i, 'mother ID']
-#        did = df.at[i, 'daughter ID']
-#        iid = df.at[i, 'initiator ID']
-#        nori_init = df.at[i, 'nori init']
-#        Lambda_i = df.at[i, 'Lambda_i']
-#        sd = df.at[i,'Sd']
-#        sb = df.at[i,'Sb']
-#
-#        hasinit = not (iid is None)
-#        idx = df['initiator ID'] == cid
-#        if np.sum(idx.to_list()) == 1:  # if there is exactly one initiation
-#            # initiation size if there is initiation in current generation
-#            Si = df.loc[idx, 'nori init'].iloc[0] * df.loc[idx, 'Lambda_i'].iloc[0]
-#            df.at[i, 'Si'] = Si
-#
-#            # Added size from birth to initiation
-#            Delta_bi = Si - sb
-#            df.at[i,'Delta_bi'] = Delta_bi
-#
-#            # initiation-to-birth ratio
-#            if hasinit:
-#                R_bi = Si/sb
-#                df.at[i, 'R_bi'] = R_bi
-#
-#        # division-to-birth ratio
-#        R_bd = sd/sb
-#        df.at[i, 'R_bd'] = R_bd
-#
-#        # initiation size per ori in previous and next replication cycle
-#        if not (mid is None):
-#            idx = df['cell ID'] == mid
-#            if np.sum(idx.to_list()) == 1:
-#                df.at[i, 'Lambda_i_b'] = df.loc[idx, 'Lambda_i'].iloc[0]
-#        if not (did is None):
-#            idx = df['cell ID'] == did
-#            if np.sum(idx.to_list()) == 1:
-#                df.at[i, 'Lambda_i_f'] = df.loc[idx, 'Lambda_i'].iloc[0]
-#
-#        # initiation-to-initiation duration -- backward
-#        mhasinit = False
-#        if not ( (mid is None) or (gw and mid < 0)):
-#            idx = df['cell ID'] == mid
-#            if np.sum(idx.to_list()) != 1:
-#                raise ValueError("There should be exactly one mother cell")
-#            miid = df.loc[idx, 'initiator ID'].iloc[0]
-#            mhasinit = not (miid is None)
-#        if hasinit and mhasinit:
-#            ## age at initiation
-#            Bs = get_seq(df, cid, 'initiator B', mid)
-#            mB, B = Bs
-#
-#            taus = get_seq(df, iid, 'tau', miid)
-#            taus[0] = taus[0] - mB # subtract B period in mother initiator cell
-#            taus[-1] = B            # only count until initiation happens in current initiator cell
-#
-#            ## total duration from previous initiation to current initiation
-#            tau_ii = np.sum(taus)
-#            df.at[i, 'tau_ii_b'] = tau_ii
-#
-#        # initiation-to-initiation duration -- forward
-#        dhasinit = False
-#        if not (did is None):
-#            idx = df['cell ID'] == did
-#            if np.sum(idx.to_list()) == 1:
-#                diid = df.loc[idx, 'initiator ID'].iloc[0]
-#                dhasinit = not (diid is None)
-#        if hasinit and dhasinit:
-#            ## age at initiation
-#            Bs = get_seq(df, did, 'initiator B', cid)
-#            mB, B = Bs
-#
-#            taus = get_seq(df, diid, 'tau', iid)
-#            taus[0] = taus[0] - mB # subtract B period in mother initiator cell
-#            taus[-1] = B            # only count until initiation happens in current initiator cell
-#
-#            ## total duration from previous initiation to current initiation
-#            tau_ii = np.sum(taus)
-#            df.at[i, 'tau_ii_f'] = tau_ii
-#
-#        # division to initiation ratio
-#        if gw:
-#            if hasinit:
-#                R_id = sd / Lambda_i
-#                df.at[i, 'R_id'] = R_id
-#        else:
-#            R_id = sd / Lambda_i
-#            df.at[i, 'R_id'] = R_id
-#
-#        # initiation to initiation ratio -- backward
-#        if not (mid is None):
-#            idx = df['cell ID'] == mid
-#            if not gw and np.sum(idx.to_list()) != 1:
-#                raise ValueError("There should be exactly one mother cell")
-#            if gw and (mid < 0):
-#                continue
-#
-#            mLambda_i = df.loc[idx, 'Lambda_i'].iloc[0]
-#
-#            if gw and (Lambda_i is None or mLambda_i is None):
-#                continue
-#            df.at[i, 'R_ii_b'] = 2*Lambda_i / mLambda_i   # factor of 2 so that there is an exponential fit
-#                                            # from previous to current initiation
-#
-#        # initiation to initiation ratio -- forward
-#        if not (did is None):
-#            idx = df['cell ID'] == did
-#            if not gw and np.sum(idx.to_list()) != 1:
-#                continue
-#            if gw and (mid < 0):
-#                continue
-#            Lambda_i_f = df.loc[idx, 'Lambda_i'].iloc[0]
-#            if gw and (Lambda_i is None or Lambda_i_f is None):
-#                continue
-#            df.at[i, 'R_ii_f'] = 2*Lambda_i_f / Lambda_i   # factor of 2 so that there is an exponential fit
-#                                                # from previous to current initiation
-#
-#    # add other specific variables
-#    add_delta_ii_forward(df, gw)
-#
     return
 
 class ResultStruct:
@@ -2013,7 +1939,7 @@ def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, 
         n = len(specials)
         special_colors = [c]*n
 
-    fig = plt.figure(num='none', facecolor='w',figsize=figsize)
+    fig = plt.figure(num='none', facecolor='w', figsize=figsize)
     ax = fig.gca()
     ax.tick_params(bottom=True, left=True, labelbottom=True, labelleft=True)
     ax.tick_params(axis='both', which='both', length=4)
@@ -2024,14 +1950,16 @@ def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, 
 
     labels = []
     values = []
+    npts = []
     colors = []
     if nval is None:
         nval = len(table)
     for i in range(nval):
-        comb = table[i][:-1]
+        comb = table[i][:3]
         thevars = [label_mapping[v] for v in comb]
         labels.append(", ".join(thevars))
-        values.append(table[i][-1])
+        values.append(float(table[i][3]))
+        npts.append(int(table[i][4]))
         color = color_default
         for k,sp_comb in enumerate(specials):
             if set(sp_comb) == set(comb):
@@ -2047,9 +1975,9 @@ def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, 
     ax.set_yticklabels(labels,fontsize='medium')
     ax.invert_yaxis()
     ax.set_xlabel("I value", fontsize='medium')
-    ax.set_xlim(0.,1.)
     ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
     ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.set_xlim(xmin=0.,xmax=1.)
     #set_xticks(np.arange(11, dtype=np.float_)/10)
 
     rect=[0.,0.,1.,0.99]
@@ -2083,8 +2011,8 @@ def plot_Ivalues_all(table, lw=0.5, ms=1, fig_title=None, figsize=None, fmt_str=
     colors = []
     nval = len(table)
     for i in range(nval):
-        comb = table[i][:-1]
-        val = table[i][-1]
+        comb = table[i][:3]
+        val = float(table[i][3])
         isdefault=True
         values_default.append(val)
         for k, sp_comb in enumerate(specials):
