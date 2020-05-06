@@ -1,0 +1,14 @@
+---
+version: '3'
+services:
+  jupyter:
+    image: colicycle
+    build:
+       context: "."
+       dockerfile: "./docker/Dockerfile"
+    container_name: colicycle
+    ports:
+      - "9999:8888"
+    volumes:
+      - ".:/user"
+    command: jupyter lab --no-browser --ip 0.0.0.0 --allow-root

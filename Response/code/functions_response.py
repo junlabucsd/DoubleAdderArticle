@@ -1826,6 +1826,7 @@ def add_R_ii_f(df, gw=False):
         df.at[i, 'R_ii_f'] = 2*Lambda_i_f / Lambda_i   # factor of 2 so that there is an exponential fit
 
     return
+
 def get_seq(df, cid, field, tid=None):
     """
     Return the divisions ratio from initiator generation to current generation.
