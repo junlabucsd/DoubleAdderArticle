@@ -2038,6 +2038,59 @@ def plot_Ivalues_all(table, lw=0.5, ms=1, fig_title=None, figsize=None, fmt_str=
         fig.suptitle(fig_title, fontsize='large', x=0.5, ha='center')
     return fig
 
+def plot_Ivalues_all_overlay(tables, lw=0.5, ms=1, fig_title=None, figsize=None, fmt_str='{:.4f}', specials=[], special_colors='red'):
+    """
+    This function plots the determinant values in the input tables
+    """
+
+    if not isinstance(special_colors, list):
+        c = special_colors
+        n = len(specials)
+        special_colors = [c]*n
+
+    fig = plt.figure(num='none', facecolor='w',figsize=figsize)
+    ax = fig.gca()
+    ax.tick_params(bottom=True, left=True, labelbottom=True, labelleft=True)
+    ax.tick_params(axis='both', which='both', length=4)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_smart_bounds(True)
+    ax.spines['bottom'].set_smart_bounds(True)
+
+
+    for table in tables:
+        values_default = []
+        list_special = []
+        colors = []
+        nval = len(table)
+        for i in range(nval):
+            comb = table[i][:3]
+            val = float(table[i][3])
+            isdefault=True
+            values_default.append(val)
+            for k, sp_comb in enumerate(specials):
+                if set(sp_comb) == set(comb):
+                    print("Found special combination!")
+                    color = special_colors[k]
+                    list_special.append([i, val, color])
+                    break
+
+        X = np.arange(nval)
+        ax.plot(X, values_default, '-', lw=lw, color='k')
+        for i, val, color in list_special:
+            ax.plot([i], [val], 'o', ms=4*ms, color=color)
+
+    ax.set_ylabel("I value", fontsize='medium')
+    ax.set_ylim(0.,1.)
+    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    #set_xticks(np.arange(11, dtype=np.float_)/10)
+
+    rect=[0.,0.,1.,0.99]
+    fig.tight_layout(rect=rect)
+    if not fig_title is None:
+        fig.suptitle(fig_title, fontsize='large', x=0.5, ha='center')
+    return fig
 def load_table(fpath):
     """
     Load table of determinant analysis
