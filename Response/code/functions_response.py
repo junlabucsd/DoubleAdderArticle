@@ -100,7 +100,7 @@ def get_mean_std_logn(mu, std):
 
 ### Model check ###
 
-def plot_model_check(data_dict, binw_dict=None, \
+def plot_model_check(data_dict, binw_dict=None, npts_bin = 10, \
                     fig=None, lw=0.5, ms=2, alpha=0.2 ,fig_title=None):
 
     # parameters and input
@@ -174,7 +174,7 @@ def plot_model_check(data_dict, binw_dict=None, \
         Y_counts[i] = Zi
         Y_binned[i] = m
         Y_vars[i] = v
-    idx = np.isfinite(Y_counts) & (Y_counts > 2)
+    idx = np.isfinite(Y_counts) & (Y_counts > npts_bin)
     mLAi_binned = X_binned[idx]
     LAi_binned = Y_binned[idx]
     LAi_binned_err = np.sqrt(Y_vars[idx]/Y_counts[idx])
@@ -208,7 +208,7 @@ def plot_model_check(data_dict, binw_dict=None, \
         Y_counts[i] = Zi
         Y_binned[i] = m
         Y_vars[i] = v
-    idx = np.isfinite(Y_counts) & (Y_counts > 2)
+    idx = np.isfinite(Y_counts) & (Y_counts > npts_bin)
     mLd_binned = X_binned[idx]
     Ld_binned = Y_binned[idx]
     Ld_binned_err = np.sqrt(Y_vars[idx]/Y_counts[idx])
@@ -342,7 +342,7 @@ def plot_model_check(data_dict, binw_dict=None, \
     ax = fig.add_subplot(gs[3:5,0:2])
     axes.append(ax)
     ax.plot(mLAi,LAi,'ko', ms=ms, alpha=0.2)
-    ax.errorbar(mLAi_binned, LAi_binned, yerr=LAi_binned_err, color='k', marker='s', ms=2*ms, ecolor='k', elinewidth=4*lw, lw=lw)
+    ax.errorbar(mLAi_binned, LAi_binned, yerr=LAi_binned_err, color='b', marker='s', ms=2*ms, ecolor='b', elinewidth=4*lw, lw=lw)
     acf = dists['Lambda_i']['fit']['acf']
     acf_sim = sst.pearsonr(mLAi,LAi)[0]
     ax.plot(LAi_fit, acf*LAi_fit + (1-acf)*dists['Lambda_i']['mean'] , 'r--', lw=2*lw, label='pred')
@@ -364,7 +364,7 @@ def plot_model_check(data_dict, binw_dict=None, \
     ax.plot(mLd,Ld,'ko', ms=ms, alpha=0.2)
     acf = dists['Ld']['fit']['acf']
     acf_sim = sst.pearsonr(mLd,Ld)[0]
-    ax.errorbar(mLd_binned, Ld_binned, yerr=Ld_binned_err, color='k', marker='s', ms=2*ms, ecolor='k', elinewidth=4*lw, lw=lw)
+    ax.errorbar(mLd_binned, Ld_binned, yerr=Ld_binned_err, color='b', marker='s', ms=2*ms, ecolor='b', elinewidth=4*lw, lw=lw)
     ax.plot(Ld_fit, acf*Ld_fit + (1-acf)*dists['Ld']['mean'] , 'r--', lw=2*lw, label='pred')
     ax.annotate("$\\rho = {:.2f}$\n$\\rho_\mathrm{{pred}} = {:.2f}$".format(acf_sim, acf), xy=(1.,0.02), xycoords='axes fraction', va='bottom', ha='right', fontsize='large')
     ax.set_aspect('equal')
@@ -434,9 +434,6 @@ def process_df_EXP2(df_):
     del df['ncycle']
     del df['nori init']
     del df['Si_fit']
-    del df['Sb_fit']
-    del df['Sd_fit']
-    del df['delta_id_m1']
     del df['delta_id_m2']
     del df['delta_id_m3']
 
@@ -602,21 +599,6 @@ def plot_simulation_single(fig, axes, data_dict, n_ind, n_tot, lw=0.5, ms=2, bar
     # prepare data
     data = df.loc[:, columns].dropna().to_numpy().astype('float64')
     Lb, Ld, LAi, delta_ii, delta_id, mid, rfact, mLd, mLAi = data.T
-#    LAi = Li / nori_id
-#    mLAi = mLi / mnori_id
-#    delta_id = Delta_id / (2*nori_id)
-#    delta_ii = Delta_ii / (2*nori_ii)
-
-#    mu_ii = np.nanmean(delta_ii)
-#    s_ii =  np.nanstd(delta_ii)
-#    mu_id = np.nanmean(delta_id)
-#    s_id =  np.nanstd(delta_id)
-#    mu_i_pred = 2*mu_ii
-#    std_i_pred = 2./np.sqrt(3) * s_ii
-#    acf_i_pred = 0.5
-#    acf_d_pred = 0.5 / (1. + 3.*s_id**2/s_ii**2)
-#    mu_d_pred = nori_initial*2*(mu_ii+mu_id)
-#    std_d_pred = nori_initial*2.*np.sqrt(s_ii**2 / 3. + s_id**2)
 
     # one last check
     ninit_cells = np.sum(rfact == 0.5)
@@ -882,7 +864,7 @@ def plot_adder_compare(df_dict, fig=None, lw=0.5, ms=2, ylim=None, fig_title=Non
     fig.tight_layout(rect=[0.,0.,1.,0.95])
     return fig
 
-def plot_adder(axes, data_dict, lw=-.5, ms=2, plot_pred=False):
+def plot_adder(axes, data_dict, npts_bin=10, lw=-.5, ms=2, plot_pred=False):
     # parameters and input
     df = data_dict['df']
     color = data_dict['color']
@@ -986,11 +968,11 @@ def plot_adder(axes, data_dict, lw=-.5, ms=2, plot_pred=False):
         Y_counts[i] = Zi
         Y_binned[i] = m
         Y_vars[i] = v
-    idx = np.isfinite(Y_counts) & (Y_counts > 2)
+    idx = np.isfinite(Y_counts) & (Y_counts > npts_bin)
     mLd_binned = X_binned[idx]
     Ld_binned = Y_binned[idx]
     Ld_binned_err = np.sqrt(Y_vars[idx]/Y_counts[idx])
-    mLd_fit = np.linspace(mLd_binned[0], mLd_binned[-1], 1000)
+    mLd_fit = np.linspace(np.min(mLd), np.max(mLd), 1000)
     mu_d = np.nanmean(Ld)
 
     # plot data
@@ -1022,7 +1004,7 @@ def plot_adder(axes, data_dict, lw=-.5, ms=2, plot_pred=False):
         Y_counts[i] = Zi
         Y_binned[i] = m
         Y_vars[i] = v
-    idx = np.isfinite(Y_counts) & (Y_counts > 2)
+    idx = np.isfinite(Y_counts) & (Y_counts > npts_bin)
     Lb_binned = X_binned[idx]
     DL_binned = Y_binned[idx]
     DL_binned_err = np.sqrt(Y_vars[idx]/Y_counts[idx])
@@ -1106,13 +1088,16 @@ def process_gw(df, time_scale, fitting=False):
     add_si_fit(df)
 
     # add initiation-to-initiation adder
-    add_delta_ii(df, gw=True)
+    add_delta_ii_backward(df, gw=True)
+    add_delta_ii_forward(df, gw=True)
+    df.rename(columns={'delta_ii_forward': 'delta_ii'}, inplace=True)
     del df['DLi']
 
     # add initiation-to-division adder
     add_delta_id_method1(df, gw=True)
     add_delta_id_method2(df)
     add_delta_id_method3(df)
+    df.rename(columns={'delta_id_m1': 'delta_id'}, inplace=True)
 
     return
 
@@ -1130,7 +1115,8 @@ def process_fsglt(df):
     add_si_fit(df)
 
     # add initiation-to-initiation adder
-    add_delta_ii(df)
+    add_delta_ii_backward(df)   # consistent with simulations of Witz et al.
+    add_delta_ii_forward(df)
 
     # add initiation-to-division adder
     add_delta_id_method1(df)
@@ -1346,7 +1332,9 @@ def add_Lambda_i(df, time_scale):
         lengths = df.loc[idx,'length'].iloc[0]
         if lengths is None:
             # happens when number of points for fit was less than the minimum
+            # only when the lengths are fitted
             continue
+
         npts = len(lengths)
 
         tau = df.loc[idx, 'tau'].iloc[0]
@@ -1360,15 +1348,16 @@ def add_Lambda_i(df, time_scale):
 
     return
 
-def add_delta_ii(df, gw=False):
+def add_delta_ii_backward(df, gw=False):
     """
     Add delta_ii: added size from initiation to initiation per origin
     This is the definition consistent with:
       * the `cross_generation_construct` method in `decomposition.py` file.
       * the implementation `simul_doubleadder` in `coli_simulation.py` file.
+      * the notebook `data_aggregation.ipynb`
 
     """
-    df['delta_ii'] = None
+    df['delta_ii_backward'] = None
 
     for i in df.index:
         cell_id = df.at[i, 'cell ID']
@@ -1392,7 +1381,7 @@ def add_delta_ii(df, gw=False):
         if gw and ( (Lambda_i is None) or (mLambda_i is None) ):
             continue
 
-        df.at[i, 'delta_ii'] = Lambda_i - 0.5*mLambda_i
+        df.at[i, 'delta_ii_backward'] = Lambda_i - 0.5*mLambda_i
     # end loop on cells
 
     return
@@ -1873,7 +1862,6 @@ def add_allvariables(df, gw=False):
     add_R_id(df)
     add_R_ii_b(df, gw)
     add_R_ii_f(df, gw)
-    add_delta_ii_forward(df, gw)
 
     return
 
@@ -1929,6 +1917,54 @@ def compute_determinant(mat):
 
     K = np.cov(mat)
     return np.linalg.det(K)/np.prod(np.diag(K))
+
+def plot_Ivalues_main_models(table, lw=0.5, ms=2, fig_title=None, figsize=None, bar_width=0.7, colors=None):
+    """
+    Function that plots the I-values scores for a *few* models.
+    """
+
+    fig = plt.figure(num='none', facecolor='w', figsize=figsize)
+    ax = fig.gca()
+    ax.tick_params(bottom=False, left=True, labelbottom=True, labelleft=True)
+    ax.tick_params(axis='both', which='both', length=4)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.spines['left'].set_smart_bounds(True)
+    ax.spines['bottom'].set_smart_bounds(True)
+
+    nconditions = len(table)-1
+    nmodels = len(table[0]) - 1
+    bwidth = bar_width/float(nmodels)
+
+    xlabels = [t[0] for t in table[1:]]
+    X = np.arange(nconditions)
+
+    labels = table[0][1:]
+
+    if (not colors is None) and len(colors) < nmodels:
+        print("Not enough colors!")
+        colors=None
+
+    if colors is None:
+        colors = [None]*nmodels
+
+    for i in range(nmodels):
+        Y = np.array([t[i+1] for t in table[1:]], dtype=np.float_)
+        rects = ax.bar(X + i*bwidth, Y, width=bwidth, label=labels[i], color=colors[i])
+
+    ax.set_xticks(X+0.5*bar_width)
+    ax.set_xticklabels(xlabels, rotation='90', fontsize='medium')
+    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.set_ylim(ymin=0.,ymax=1.)
+    ax.set_ylabel("I value", fontsize='medium')
+    ax.legend(loc='upper left', fontsize='medium', bbox_to_anchor=(1.,0.98))
+
+    rect=[0.,0.,1.,0.98]
+    fig.tight_layout(rect=rect)
+    if not fig_title is None:
+        fig.suptitle(fig_title, fontsize='large', x=0.5, ha='center')
+    return fig
 
 def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, figsize=None, fmt_str='{:.4f}', specials=[], color_default='black', special_colors='red'):
     """
@@ -2092,21 +2128,25 @@ def plot_Ivalues_all_overlay(tables, lw=0.5, ms=1, fig_title=None, figsize=None,
     if not fig_title is None:
         fig.suptitle(fig_title, fontsize='large', x=0.5, ha='center')
     return fig
-def load_table(fpath):
+
+def load_table(fpath, skiprows=1):
     """
     Load table of determinant analysis
     """
     table = []
     with open(fpath,'r') as fin:
-        fin.readline()  # pass first line
+        count = 0
         while True:
             line = fin.readline()
+            count += 1
+            if not (count > skiprows):
+                continue
             if line == "":
                 break
             if line == '\n':
                 break
             tab = line.split()
-            tab[-1] = float(tab[-1])
+            #tab[-1] = float(tab[-1])
             table.append(tab)
     return table
 
