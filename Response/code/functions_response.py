@@ -842,16 +842,16 @@ def plot_adder_compare(df_dict, fig=None, lw=0.5, ms=2, ylim=None, fig_title=Non
 
     ax = axes[0]
     ax.set_aspect('equal')
-    xlabel='$S_d^{(n-1)}$'
-    ylabel='$S_d^{(n)}$'
+    xlabel='$S_d^{(n-1)}/\langle S_d \\rangle$'
+    ylabel='$S_d^{(n)}/\langle S_d \\rangle$'
     ax.set_title("Division size correlation: $(S_d^{(n-1)}, S_d^{(n)})$", fontsize='medium')
     ax.set_xlabel(xlabel, fontsize='large')
     ax.set_ylabel(ylabel, fontsize='large')
 
     ax = axes[1]
     ax.set_aspect('equal')
-    xlabel='$S_b$'
-    ylabel='$S_d-S_b$'
+    xlabel='$S_b/\langle S_b \\rangle$'
+    ylabel='$\Delta_d/\langle \Delta_d \\rangle$'
     ax.set_xlabel(xlabel, fontsize='large')
     ax.set_ylabel(ylabel, fontsize='large')
     ax.set_title("Adder correlation: $(S_b, S_d-S_b)$", fontsize='medium')
@@ -943,6 +943,10 @@ def plot_adder(axes, data_dict, npts_bin=10, lw=-.5, ms=2, plot_pred=False):
     data = df.loc[:, columns].dropna().to_numpy().astype('float64')
     Lb, Ld, mid, mLd = data.astype('float64').T
     DL = Ld - Lb
+    Lb = Lb / np.nanmean(Lb)
+    Ld = Ld / np.nanmean(Ld)
+    mLd = mLd / np.nanmean(mLd)
+    DL = DL / np.nanmean(DL)
     r_d = sst.pearsonr(mLd, Ld)[0]    # true mother/daughter correlation
     a_d = sst.pearsonr(2*Lb, Ld)[0]   # this is appropriate for the adder plot
     label += ", $r = {:.2f}$, $\\alpha = {:.2f}$".format(r_d, a_d)
@@ -981,7 +985,7 @@ def plot_adder(axes, data_dict, npts_bin=10, lw=-.5, ms=2, plot_pred=False):
     #ax.plot(mLd_fit, r_d*mLd_fit + (1-r_d)*mu_d , '-', lw=2*lw, color=color)
 
     if plot_pred:
-        ax.plot(mLd_fit, acf_d_pred*mLd_fit + (1-acf_d_pred)*mu_d_pred , '--', lw=2*lw, color='k', label='prediction, $r = \\alpha = {:.2f}$'.format(acf_d_pred), zorder=3)
+        ax.plot(mLd_fit, acf_d_pred*mLd_fit + (1-acf_d_pred) , '--', lw=2*lw, color='k', label='prediction, $r = \\alpha = {:.2f}$'.format(acf_d_pred), zorder=3)
 
     # adder plot
     ax = axes[1]
@@ -1017,7 +1021,7 @@ def plot_adder(axes, data_dict, npts_bin=10, lw=-.5, ms=2, plot_pred=False):
     #ax.plot(Lb_fit, (2*a_d-1.)*Lb_fit + 2*(1-a_d)*mu_b , '-', lw=2*lw, color=color)
 
     if plot_pred:
-        ax.plot(Lb_fit, (2*acf_d_pred-1.)*Lb_fit + 2*(1-acf_d_pred)*mu_d_pred/2 , '--', lw=2*lw, color='k', label='prediction, $r = \\alpha = {:.2f}$'.format(acf_d_pred), zorder=3)
+        ax.plot(Lb_fit, (2*acf_d_pred-1.)*Lb_fit + 2*(1-acf_d_pred), '--', lw=2*lw, color='k', label='prediction, $r = \\alpha = {:.2f}$'.format(acf_d_pred), zorder=3)
 
     return
 
