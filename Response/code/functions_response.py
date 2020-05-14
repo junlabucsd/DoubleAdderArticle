@@ -820,6 +820,8 @@ def plot_adder_compare(df_dict, fig=None, lw=0.5, ms=2, ylim=None, fig_title=Non
         axes.append(ax)
     for ax in axes:
         ax.tick_params(bottom=True, left=True, labelbottom=True, labelleft=True)
+        ax.tick_params(which='major', length=8)
+        ax.tick_params(which='minor', length=4)
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
 
@@ -847,6 +849,12 @@ def plot_adder_compare(df_dict, fig=None, lw=0.5, ms=2, ylim=None, fig_title=Non
     ax.set_title("Division size correlation: $(S_d^{(n-1)}, S_d^{(n)})$", fontsize='medium')
     ax.set_xlabel(xlabel, fontsize='large')
     ax.set_ylabel(ylabel, fontsize='large')
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.set_xlim(xmin=0.5,xmax=1.5)
+    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.set_ylim(ymin=0.5,ymax=1.5)
 
     ax = axes[1]
     ax.set_aspect('equal')
@@ -857,6 +865,12 @@ def plot_adder_compare(df_dict, fig=None, lw=0.5, ms=2, ylim=None, fig_title=Non
     ax.set_title("Adder correlation: $(S_b, S_d-S_b)$", fontsize='medium')
     #ax.set_xlim(0,None)
     #ax.set_ylim(0,None)
+    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.set_xlim(xmin=0.5,xmax=1.5)
+    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.set_ylim(ymin=0.5,ymax=1.5)
     ax.legend(loc='upper left', fontsize='medium', bbox_to_anchor=(1.,0.98))
 
     # EXIT
@@ -954,7 +968,13 @@ def plot_adder(axes, data_dict, npts_bin=10, lw=-.5, ms=2, plot_pred=False):
     # division size correlation plot
     ax = axes[0]
     ## bin data
-    edges = make_binning_edges(mLd, x0=None, x1=None, binw=binw_d)
+    x0_Ld = None
+    if'x0_Ld' in data_dict:
+        x0_Ld = data_dict['x0_Ld']
+    x1_Ld = None
+    if'x1_Ld' in data_dict:
+        x1_Ld = data_dict['x1_Ld']
+    edges = make_binning_edges(mLd, x0=x0_Ld, x1=x1_Ld, binw=binw_d)
     X_binned = 0.5*(edges[:-1] + edges[1:])
     nbins = len(edges)-1
     Y_binned_sets = get_binned(mLd,Ld,edges)
@@ -990,7 +1010,13 @@ def plot_adder(axes, data_dict, npts_bin=10, lw=-.5, ms=2, plot_pred=False):
     # adder plot
     ax = axes[1]
     ## bin data
-    edges = make_binning_edges(Lb, x0=None, x1=None, binw=binw_b)
+    x0_Lb = None
+    if'x0_Lb' in data_dict:
+        x0_Lb = data_dict['x0_Lb']
+    x1_Lb = None
+    if'x1_Lb' in data_dict:
+        x1_Lb = data_dict['x1_Lb']
+    edges = make_binning_edges(Lb, x0=x0_Lb, x1=x1_Lb, binw=binw_b)
     X_binned = 0.5*(edges[:-1] + edges[1:])
     nbins = len(edges)-1
     Y_binned_sets = get_binned(Lb,DL,edges)
