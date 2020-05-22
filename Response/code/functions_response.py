@@ -7,6 +7,7 @@
 ############################################################################
 import os
 import copy
+import re
 import pickle as pkl
 import numpy as np
 import scipy.stats as sst
@@ -1155,6 +1156,115 @@ def process_fsglt(df):
 
     return
 
+### processing of Le Treut & Si & Li et al experimental data for BW E. coli and B. subtilis ###
+def process_fsglt20(df):
+    """
+    Method to process experimental data from Si & Le Treut and add several attributes.
+    """
+
+    # add initiation-to-division adder
+    add_delta_id_method1(df)
+
+    return
+
+### processing of Sauls et al experimental data ###
+def process_jts(df):
+    """
+    Method to process experimental data from Si & Le Treut and add several attributes.
+    """
+
+    # add mother ids
+    add_mother_id(df)
+
+    # add initiation information
+    add_initiation(df)
+    add_si_fit(df)
+
+    # add initiation-to-initiation adder
+    add_delta_ii_backward(df, checknone=True)   # consistent with simulations of Witz et al.
+    add_delta_ii_forward(df, checknone=True)
+
+    # add initiation-to-division adder
+    add_delta_id_method1(df, checknone=True)
+    add_delta_id_method2(df)
+    add_delta_id_method3(df)
+
+    return
+
+def make_daughterID_jts(df):
+    """
+    For Sauls et al data
+    Keep only the daughter ID of the next mother cell.
+    """
+    pattern1 = "(f[\w]+)"
+    pattern2 = "f\w+r(\d+)"
+    for key in ['daughter ID']:
+        if key in df.columns:
+            del df[key]
+        df[key] = None
+
+    todelete = []
+    df.set_index('cell ID', inplace=True)
+    for cid in df.index:
+        did1, did2 = re.findall(pattern1, df.at[cid,'daughters'])
+        r1 = int(re.match(pattern2, did1).group(1))
+        r2 = int(re.match(pattern2, did2).group(1))
+
+        if r1 == 1:
+            df.at[cid, 'daughter ID'] = did1
+            todelete.append(did2)
+        elif r2 == 1:
+            df.at[cid, 'daughter ID'] = did2
+            todelete.append(did1)
+        else:
+            print("skipping cell {:s} with daughters {:s} and {:s}".format(cid, did1, did2))
+            todelete.append(did1)
+            todelete.append(did2)
+
+    # delete cells which are not mother cells (if there are)
+    idx = df.index.isin(todelete)
+    df.drop(df.index[idx], inplace=True)
+
+    # delete old colum
+    del df['daughters']
+
+    df.reset_index(inplace=True)
+    return
+
+def make_integer_IDs(df):
+    """
+    Transform string IDs into integer IDs.
+    Assume that the index was reset so that it is a range.
+    """
+    for key in ['daughter ID int']:
+        if key in df.columns:
+            del df[key]
+        df[key] = None
+
+
+    df.set_index('cell ID', inplace=True)
+    for cid in df.index:
+        i = df.at[cid, 'index']
+        did = df.at[cid, 'daughter ID']
+
+        if did is None:
+            continue
+
+        if did in df.index:
+            df.at[cid, 'daughter ID int'] = df.at[did, 'index']
+
+
+    df.reset_index(inplace=True)
+    col_mapping = { \
+            'cell ID': 'cell ID str', \
+            'index': 'cell ID', \
+            'daughter ID': 'daughter ID str', \
+            'daughter ID int': 'daughter ID', \
+            }
+    df.rename(columns=col_mapping, inplace=True)
+    return
+
+### helper methods ###
 def backtrack_time(mydf, cell_id, delta_t, ngen=0):
     """
     Helper function to `backtrack_initiation`
@@ -1189,7 +1299,10 @@ def backtrack_initiation(mydf, cell_id):
     # get the taucyc
     taucyc = mydf.loc[idx, 'tau_cyc'].iloc[0]
 
-    return backtrack_time(mydf, cell_id, taucyc)
+    if taucyc is None:
+        return  None, None, None
+    else:
+        return backtrack_time(mydf, cell_id, taucyc)
 
 def add_length_fit(df, time_scale):
     """
@@ -1378,7 +1491,7 @@ def add_Lambda_i(df, time_scale):
 
     return
 
-def add_delta_ii_backward(df, gw=False):
+def add_delta_ii_backward(df, gw=False, checknone=False):
     """
     Add delta_ii: added size from initiation to initiation per origin
     This is the definition consistent with:
@@ -1408,7 +1521,7 @@ def add_delta_ii_backward(df, gw=False):
 
         mLambda_i = df.loc[idx, 'Lambda_i'].iloc[0]
 
-        if gw and ( (Lambda_i is None) or (mLambda_i is None) ):
+        if (gw or checknone) and ( (Lambda_i is None) or (mLambda_i is None) ):
             continue
 
         df.at[i, 'delta_ii_backward'] = Lambda_i - 0.5*mLambda_i
@@ -1416,7 +1529,7 @@ def add_delta_ii_backward(df, gw=False):
 
     return
 
-def add_delta_ii_forward(df, gw=False):
+def add_delta_ii_forward(df, gw=False, checknone=False):
     """
     Add delta_ii: added size from initiation to initiation per origin
     This definition is consistent with Si & Le Treut 2019.
@@ -1437,7 +1550,7 @@ def add_delta_ii_forward(df, gw=False):
 
         Lambda_i_f = df.loc[idx, 'Lambda_i'].iloc[0]
 
-        if gw and ( (Lambda_i is None) or (Lambda_i_f is None) ):
+        if (gw or checknone) and ( (Lambda_i is None) or (Lambda_i_f is None) ):
             continue
 
 
@@ -1446,7 +1559,7 @@ def add_delta_ii_forward(df, gw=False):
 
     return
 
-def add_delta_id_method1(df, gw=False):
+def add_delta_id_method1(df, gw=False, checknone=False):
     """
     Add delta_id: added size from initiation to division per origin.
     """
@@ -1455,7 +1568,7 @@ def add_delta_id_method1(df, gw=False):
 
     for i in df.index:
         Lambda_i = df.at[i, 'Lambda_i']
-        if gw and Lambda_i is None:
+        if (gw or checknone) and Lambda_i is None:
             continue
         sd = df.at[i, 'Sd']
         df.at[i,delta_key] = 0.5*(sd - Lambda_i)
@@ -1643,7 +1756,7 @@ def add_R_bd(df):
         R_bd = sd/sb
         df.at[i, col] = R_bd
 
-def add_Lambda_i_b(df, gw):
+def add_Lambda_i_b(df, gw=False):
     """
     \'backward\' initiation size per oriC (it triggers the division of the mother cell)
     """
@@ -1780,7 +1893,7 @@ def add_R_id(df):
 
     return
 
-def add_R_ii_b(df, gw=False):
+def add_R_ii_b(df, gw=False, checknone=False):
     col = 'R_ii_b'
     if col in df.columns:
         del df[col]
@@ -1797,7 +1910,7 @@ def add_R_ii_b(df, gw=False):
         if gw and mid < 0:
             continue
 
-        if gw and Lambda_i is None:
+        if (gw or checknone) and Lambda_i is None:
             continue
 
         idx = df['cell ID'] == mid
@@ -1809,14 +1922,14 @@ def add_R_ii_b(df, gw=False):
 
         Lambda_i_b = df.loc[idx, 'Lambda_i'].iloc[0]
 
-        if gw and Lambda_i_b is None:
+        if (gw or checknone) and Lambda_i_b is None:
             continue
 
         df.at[i, col] = 2*Lambda_i / Lambda_i_b   # factor of 2 so that there is an exponential fit
 
     return
 
-def add_R_ii_f(df, gw=False):
+def add_R_ii_f(df, gw=False, checknone=False):
     col = 'R_ii_f'
     if col in df.columns:
         del df[col]
@@ -1830,7 +1943,7 @@ def add_R_ii_f(df, gw=False):
         if did is None:
             continue
 
-        if gw and Lambda_i is None:
+        if (gw or checknone) and Lambda_i is None:
             continue
 
         idx = df['cell ID'] == did
@@ -1839,7 +1952,7 @@ def add_R_ii_f(df, gw=False):
 
         Lambda_i_f = df.loc[idx, 'Lambda_i'].iloc[0]
 
-        if gw and Lambda_i_f is None:
+        if (gw or checknone) and Lambda_i_f is None:
             continue
 
         df.at[i, 'R_ii_f'] = 2*Lambda_i_f / Lambda_i   # factor of 2 so that there is an exponential fit
@@ -1876,7 +1989,7 @@ def get_seq(df, cid, field, tid=None):
     res.reverse()
     return res
 
-def add_allvariables(df, gw=False):
+def add_allvariables(df, gw=False, checknone=False):
     """
     This method add all physiological variables that will be used in the determinant scoring analysis.
     """
@@ -1890,8 +2003,8 @@ def add_allvariables(df, gw=False):
     add_tau_ii_b(df, gw)
     add_tau_ii_f(df, gw)
     add_R_id(df)
-    add_R_ii_b(df, gw)
-    add_R_ii_f(df, gw)
+    add_R_ii_b(df, gw, checknone)
+    add_R_ii_f(df, gw, checknone)
 
     return
 
@@ -1931,7 +2044,6 @@ def fit_lognormal_fsglt(xdata_, fit_range):
     xdata = np.array(xdata_, dtype=np.float_)
     idx = xdata > 0.
     xdata = xdata[idx]
-
 
     return fit_normal_fsglt(np.log(xdata), fit_range)
 
