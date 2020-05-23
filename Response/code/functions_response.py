@@ -23,7 +23,6 @@ import matplotlib.ticker
 ############################################################################
 
 ### helper methods ###
-
 def histogram(X,density=True):
     valmax = np.max(X)
     valmin = np.min(X)
@@ -100,7 +99,6 @@ def get_mean_std_logn(mu, std):
     return m,s
 
 ### Model check ###
-
 def plot_model_check(data_dict, binw_dict=None, npts_bin = 10, \
                     fig=None, lw=0.5, ms=2, alpha=0.2 ,fig_title=None):
 
@@ -1054,7 +1052,7 @@ def plot_adder(axes, data_dict, npts_bin=10, lw=-.5, ms=2, plot_pred=False):
 
 ### processing of Witz et al experimental data ###
 
-def process_gw(df, time_scale, fitting=False):
+def process_gw(df, time_scale, fitting=False, period=0):
     """
     Method to process experimental data from Witz et al.
     """
@@ -1068,6 +1066,11 @@ def process_gw(df, time_scale, fitting=False):
     del df['Li_fit']
     #del df['period']
     del df['born']
+
+    # keep cells from the same period
+    idx = df['period'] == period
+    df.drop(df.index[~idx], inplace=True)
+    del df['period']
 
     # create cell ID field from index
     df.reset_index(level=0, inplace=True)
