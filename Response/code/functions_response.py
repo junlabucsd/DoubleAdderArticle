@@ -2111,7 +2111,7 @@ def plot_Ivalues_main_models(table, lw=0.5, ms=2, fig_title=None, figsize=None, 
         fig.suptitle(fig_title, fontsize='large', x=0.5, ha='center')
     return fig
 
-def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, figsize=None, fmt_str='{:.4f}', specials=[], color_default='black', special_colors='red'):
+def plot_Ivalues(table, label_mapping, nvar, nval=None, lw=0.5, ms=2, fig_title=None, figsize=None, fmt_str='{:.4f}', specials=[], color_default='black', special_colors='red'):
     """
     This function plots the determinant values in the table
     """
@@ -2137,11 +2137,11 @@ def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, 
     if nval is None:
         nval = len(table)
     for i in range(nval):
-        comb = table[i][:3]
+        comb = table[i][:nvar]
         thevars = [label_mapping[v] for v in comb]
         labels.append(", ".join(thevars))
-        values.append(float(table[i][3]))
-        npts.append(int(table[i][4]))
+        values.append(float(table[i][nvar]))
+        npts.append(int(table[i][nvar+1]))
         color = color_default
         for k,sp_comb in enumerate(specials):
             if set(sp_comb) == set(comb):
@@ -2168,7 +2168,7 @@ def plot_Ivalues(table, label_mapping, nval=None, lw=0.5, ms=2, fig_title=None, 
         fig.suptitle(fig_title, fontsize='large', x=0.5, ha='center')
     return fig
 
-def plot_Ivalues_all(table, lw=0.5, ms=1, fig_title=None, figsize=None, fmt_str='{:.4f}', specials=[], color_default='black', special_colors='red'):
+def plot_Ivalues_all(table, nvar, lw=0.5, ms=1, fig_title=None, figsize=None, fmt_str='{:.4f}', specials=[], color_default='black', special_colors='red'):
     """
     This function plots the determinant values in the table
     """
@@ -2193,8 +2193,8 @@ def plot_Ivalues_all(table, lw=0.5, ms=1, fig_title=None, figsize=None, fmt_str=
     colors = []
     nval = len(table)
     for i in range(nval):
-        comb = table[i][:3]
-        val = float(table[i][3])
+        comb = table[i][:nvar]
+        val = float(table[i][nvar])
         isdefault=True
         values_default.append(val)
         for k, sp_comb in enumerate(specials):
@@ -2220,7 +2220,7 @@ def plot_Ivalues_all(table, lw=0.5, ms=1, fig_title=None, figsize=None, fmt_str=
         fig.suptitle(fig_title, fontsize='large', x=0.5, ha='center')
     return fig
 
-def plot_Ivalues_all_overlay(tables, lw=0.5, ms=1, fig_title=None, figsize=None, fmt_str='{:.4f}', specials=[], special_colors='red'):
+def plot_Ivalues_all_overlay(tables, nvar, lw=0.5, ms=1, fig_title=None, figsize=None, fmt_str='{:.4f}', specials=[], special_colors='red'):
     """
     This function plots the determinant values in the input tables
     """
@@ -2246,8 +2246,8 @@ def plot_Ivalues_all_overlay(tables, lw=0.5, ms=1, fig_title=None, figsize=None,
         colors = []
         nval = len(table)
         for i in range(nval):
-            comb = table[i][:3]
-            val = float(table[i][3])
+            comb = table[i][:nvar]
+            val = float(table[i][nvar])
             isdefault=True
             values_default.append(val)
             for k, sp_comb in enumerate(specials):
