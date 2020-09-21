@@ -16,7 +16,7 @@ import matplotlib.gridspec as mgs
 import matplotlib.cm as cm
 import matplotlib.patches as mpatches
 import matplotlib.colors as mco
-import matplotlib.ticker
+import matplotlib.ticker as ticker
 
 ############################################################################
 # functions
@@ -117,7 +117,7 @@ def plot_model_check(data_dict, binw_dict=None, npts_bin = 10, \
         raise ValueError("Data format must be \'SIM\' or \'EXP2\'!")
 
     # extraction
-    columns = ['Lb', 'Ld', 'LAi', 'dLi', 'dLdLi', 'mother_id', 'rfact']
+    columns = ['Lb', 'Ld', 'LAi', 'dLi_backward', 'dLdLi', 'mother_id', 'rfact']
     df = copy.deepcopy(df.loc[:, columns])
     if len(df.dropna()) == 0:
         raise ValueError("Problem with one of the columns")
@@ -465,7 +465,7 @@ def process_df_SIM(df_):
     renamedict = {'Lb_fit': 'Lb', \
                   'Ld_fit': 'Ld', \
                   'Li_fit': 'LAi', \
-                  'DLi': 'dLi', \
+                  'DLi': 'dLi_backward', \
                   'final_DLdLi': 'dLdLi', \
                   'tau_fit': 'lambda_inv', \
                   'born': 'Tb', \
@@ -477,7 +477,15 @@ def process_df_SIM(df_):
     del df['mLi_fit']
     del df['mLd_fit']
 
-    # some additional computations
+    # compute dLi (the simulations output the backward convention)
+    df['dLi'] = None
+    for i in df.index:
+        im = df.at[i,'mother_id']
+        delta_ii = df.at[i,'dLi_backward']
+        if im in df.index:
+            df.at[im, 'dLi'] = delta_ii
+
+    # factor of 2 in initiation-division adder (definition): Sd = Lambda_i + 2 dLdLi
     df['dLdLi'] = df['dLdLi'] / 2.
 
     return df
@@ -565,7 +573,6 @@ def plot_simulation_overlays(df_dict, binw_dict=None, \
     return fig
 
 def plot_simulation_single(fig, axes, data_dict, n_ind, n_tot, lw=0.5, ms=2, bar_width=0.7, binw_dict=None):
-
     # parameters and input
     df = data_dict['df']
     color = data_dict['color']
@@ -848,11 +855,11 @@ def plot_adder_compare(df_dict, fig=None, lw=0.5, ms=2, ylim=None, fig_title=Non
     ax.set_title("Division size correlation: $(S_d^{(n-1)}, S_d^{(n)})$", fontsize='medium')
     ax.set_xlabel(xlabel, fontsize='large')
     ax.set_ylabel(ylabel, fontsize='large')
-    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
+    ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
     ax.set_xlim(xmin=0.5,xmax=1.5)
-    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
     ax.set_ylim(ymin=0.5,ymax=1.5)
 
     ax = axes[1]
@@ -864,11 +871,11 @@ def plot_adder_compare(df_dict, fig=None, lw=0.5, ms=2, ylim=None, fig_title=Non
     ax.set_title("Adder correlation: $(S_b, S_d-S_b)$", fontsize='medium')
     #ax.set_xlim(0,None)
     #ax.set_ylim(0,None)
-    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
+    ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
     ax.set_xlim(xmin=0.5,xmax=1.5)
-    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
     ax.set_ylim(ymin=0.5,ymax=1.5)
     ax.legend(loc='upper left', fontsize='medium', bbox_to_anchor=(1.,0.98))
 
@@ -1050,8 +1057,305 @@ def plot_adder(axes, data_dict, npts_bin=10, lw=-.5, ms=2, plot_pred=False):
 
     return
 
-### processing of Witz et al experimental data ###
+### analysis of the (Li, Lb) correlations
+def plot_2varcorr_expsim(dataframes, names, field_x, field_y, \
+        npts_bin=10, binw_dict=None, \
+        x0=None, x1=None, xlo=None, xhi=None, ylo=None, yhi=None, \
+        lw=0.5, ms=2, figsize=None, colors=None, func_slope=None):
 
+    # checks
+    ndata = len(dataframes)
+    if len(names) != ndata:
+        raise ValueError("names and dataframes must have same length")
+
+    if binw_dict is None:
+        binw_dict = {}
+
+    if type(binw_dict) == float:
+        binw_dict = {name: binw_dict for name in names}
+
+    for name in names:
+        if not name in binw_dict:
+            binw_dict[name] = None
+
+    if colors is None:
+        colors = {'exp': 'darkblue', 'sim asym': 'darkgreen', 'sim sym': 'darkred'}
+
+    fig = plt.figure(facecolor='w', figsize=figsize)
+    gs = mgs.GridSpec(1, ndata, hspace=0.1)
+
+    axes = []
+
+
+    for n in range(ndata):
+        name = names[n]
+        binw = binw_dict[name]
+        print(name)
+        ax = fig.add_subplot(gs[0,n])
+
+        # plot all data
+        keys = dataframes[n].keys()
+        for k in range(len(keys)):
+            key = list(keys)[k]
+            print(key)
+            color = colors[key]
+            if n == ndata-1:
+                label='{:s}'.format(key)
+            else:
+                label = None
+
+            XY = dataframes[n][key].loc[:, [field_x, field_y]].dropna().to_numpy().astype('float64')
+            XY = XY / XY.mean(axis=0)
+            X,Y = XY.T
+
+            edges = make_binning_edges(X, x0=x0, x1=x1, binw=binw)
+            binw = np.diff(edges)[0]
+#             print("\tbinw: ", binw)
+            nbins = len(edges) - 1
+            X_binned = 0.5*(edges[:-1]+edges[1:])
+
+            Y_binned_sets = get_binned(X,Y,edges)
+            Y_binned = np.zeros(nbins)*np.nan
+            Y_counts = np.zeros(nbins)*np.nan
+            Y_vars = np.zeros(nbins)*np.nan
+            for i in range(nbins):
+                Yi = Y_binned_sets[i]
+                Zi = np.nansum(np.isfinite(Yi),axis=0)
+                if (Zi == 0):
+                    continue
+                m = np.nansum(Yi) / Zi
+                v = np.nansum((Yi-m)**2) / Zi
+                Y_counts[i] = Zi
+                Y_binned[i] = m
+                Y_vars[i] = v
+            idx = np.isfinite(Y_counts) & (Y_counts > npts_bin)
+            X_binned = X_binned[idx]
+            Y_binned = Y_binned[idx]
+            Y_binned_err = np.sqrt(Y_vars[idx]/Y_counts[idx])
+
+            # plot data
+            ax.errorbar(X_binned, Y_binned, yerr=Y_binned_err, color=color, ls='none', marker='s', ms=2*ms, ecolor=color, elinewidth=1*lw, lw=lw, label=label, alpha=0.7)
+
+            # fit
+            wgts = 1./Y_binned_err**2
+        #     a = (np.sum(X_binned*Y_binned*wgts) - np.sum(X_binned*wgts)*np.sum(Y_binned*wgts)/np.sum(wgts)) \
+        #         / \
+        #         (np.sum(X_binned**2*wgts) - np.sum(X_binned*wgts)**2/np.sum(wgts))
+
+        #     b = (np.sum(Y_binned*wgts) - a*np.sum(X_binned*wgts))/np.sum(wgts)
+        #     Xfit = np.array([np.min(X_binned), np.max(X_binned)])
+        #     Yfit = a*Xfit + b
+
+            a = (np.sum((X_binned-1)*Y_binned*wgts)-np.sum((X_binned-1)*wgts))/np.sum((X_binned-1)**2*wgts)
+            Xfit = np.array([np.min(X_binned), np.max(X_binned)])
+            Yfit = a*(Xfit-1) + 1
+
+            ax.plot(Xfit, Yfit, '-', lw=lw, color=color)
+
+            # prediction from division-centric model
+#        if not 'exp' in dataframes[n]:
+#            raise ValueError('All dataframes must contain simulation data!')
+#        delta_ii, delta_dd = dataframes[n]['exp'].loc[:, ['delta_ii','Delta_bd']].to_numpy().astype('float64').T
+#        mu_ii = np.nanmean(delta_ii)
+#        mu_dd = np.nanmean(delta_dd)
+#        s_ii = np.nanstd(delta_ii)
+#        s_dd = np.nanstd(delta_dd)
+#        print("mu_ii = {:.4f}    s_ii = {:.4f}    CV = {:.0f} %".format(mu_ii, s_ii, s_ii/mu_ii*100))
+#        print("mu_dd = {:.4f}    s_dd = {:.4f}    CV = {:.0f} %".format(mu_dd, s_dd, s_dd/mu_dd*100))
+#
+#        A = -1./(mu_dd/mu_ii - 1.)
+#        xmin,xmax = ax.get_xlim()
+#        X = np.array([xmin,xmax])
+##         Y = np.sqrt(A)*r_pred*(X-1) + 1
+        if not func_slope is None:
+            A = func_slope(dataframes[n])
+            Y = A*(X-1) + 1
+            ax.plot(X,Y,'k-', lw=2*lw)
+
+        ax.set_title(name, fontsize='medium')
+
+        ax.set_xlabel(field_x, fontsize='medium')
+        ax.set_ylabel(field_y, fontsize='medium')
+        ax.tick_params(bottom=True, left=True, labelbottom=True, labelleft=True)
+        ax.tick_params(length=4)
+        ax.set_xlim(xlo, xhi)
+        ax.set_ylim(ylo, yhi)
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
+        ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+        ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
+        ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.set_aspect('equal')
+        if n == ndata-1:
+            ax.legend(loc='upper left', fontsize='medium', bbox_to_anchor=(1.0, 0.98), frameon=False)
+
+    gs.tight_layout(fig, rect=[0.,0.,1.,0.98])
+    return fig
+
+def plot_2varcorr_overlay(dataframes, names, field_x, field_y, \
+        normalize=False, npts_bin=10, binw_dict=None, \
+        x0=None, x1 = None, func_slope=None, \
+        lw=0.5, ms=2, figsize=None, show='all'):
+    """
+    binw:   bin width for Sb (note if normalized is True, then this value must be adjusted accordingly).
+    """
+
+    # checks
+    ndata = len(dataframes)
+    if len(names) != ndata:
+        raise ValueError("names and dataframes must have same length")
+
+    if binw_dict is None:
+        binw_dict = {}
+
+    if type(binw_dict) == float:
+        binw_dict = {name: binw_dict for name in names}
+
+    for name in names:
+        if not name in binw_dict:
+            binw_dict[name] = None
+
+    norm = mco.Normalize(vmin=0, vmax=ndata-1)
+    cmap = cm.rainbow
+
+    # make figure
+    fig = plt.figure(num=None, facecolor='w', figsize=figsize)
+    ax = fig.gca()
+
+    data = [] # place holder for all data
+    for n in range(ndata):
+        name = names[n]
+        color = cmap(norm(n))
+        XY = dataframes[n].loc[:, [field_x, field_y]].dropna().to_numpy().astype('float64')
+
+        if normalize:
+            mu = np.nanmean(XY, axis=0)
+            XY = XY/mu
+
+            data.append(XY)
+
+        if show == 'left':
+            idx = XY[:,0] < np.mean(XY[:,0])
+            XY = XY[idx]
+        elif show == 'right':
+            idx = XY[:,0] > np.mean(XY[:,0])
+            XY = XY[idx]
+
+        X, Y = XY.T
+
+        # make X binning
+        binw = binw_dict[name]
+        edges = make_binning_edges(X, x0=x0, x1=x1, binw=binw)
+        binw = np.diff(edges)[0]
+        print("binw = {:.4f}".format(binw))
+        x0 = edges[0]
+        x1 = edges[-1]
+        hist, edges = np.histogram(X, bins=edges, density=True)
+        X_binned = 0.5*(edges[:-1]+ edges[1:])
+        nbins = len(X_binned)
+
+        # make Y binning
+        Y_binned_sets = get_binned(X, Y, edges)
+        Y_binned = np.zeros(nbins)
+        Y_counts = np.zeros(nbins)
+        Y_vars = np.zeros(nbins)
+
+        for i in range(nbins):
+            Yi = Y_binned_sets[i]
+            Zi = np.nansum(np.isfinite(Yi),axis=0)
+            if (Zi == 0):
+                continue
+            m = np.nansum(Yi,axis=0) / Zi
+            v = np.nansum((Yi-m)**2,axis=0) / Zi
+            Y_counts[i] = Zi
+            Y_binned[i] = m
+            Y_vars[i] = v
+
+        idx = np.isfinite(Y_counts) & (Y_counts > npts_bin)
+        X_binned = X_binned[idx]
+        Y_binned = Y_binned[idx]
+        Y_binned_err = np.sqrt(Y_vars[idx]/Y_counts[idx])
+
+        r = sst.pearsonr(X, Y)[0]
+        ax.errorbar(X_binned, Y_binned, yerr=Y_binned_err, color=color, ls='-', marker='o', ms=ms, mfc='w', mec=color, ecolor=color, elinewidth=2*lw, lw=lw, label="{:s}, r = {:.2f}".format(name,r))
+
+        if not func_slope is None:
+            Xfit = np.array([np.min(X_binned), np.max(X_binned)])
+            A = func_slope(dataframes[n])
+            Yfit = A*(Xfit-1) + 1
+            ax.plot(Xfit,Yfit,'-', lw=2*lw, color=color)
+
+    ax.set_xlabel(field_x, fontsize='large')
+    ax.set_ylabel(field_y, fontsize='large')
+    ax.tick_params(bottom=True, left=True, labelbottom=True, labelleft=True)
+    ax.tick_params(length=4)
+    if normalize:
+        ax.set_xlim(0.5, 1.5)
+        ax.set_ylim(0.5, 1.5)
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
+        ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+        ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
+        ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+    else:
+        ax.set_xlim(0., None)
+        ax.set_ylim(0., None)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_aspect('equal')
+    ax.legend(loc='upper left', fontsize='medium', bbox_to_anchor=(1.0, 0.98), frameon=False)
+
+    # figure title
+    fig.tight_layout(rect=[0.,0.,1.,0.98])
+    return fig
+
+def plot_Lb_LAi_correlations_vs_growth_rate(dataframes, names, \
+        xlo=0., xhi=None, ylo=0., yhi=None, \
+        lw=0.5, ms=2, figsize=None):
+    """
+    """
+
+    # checks
+    ndata = len(dataframes)
+    if len(names) != ndata:
+        raise ValueError("names and dataframes must have same length")
+
+    norm = mco.Normalize(vmin=0, vmax=ndata-1)
+    cmap = cm.rainbow
+
+    # make figure
+    fig = plt.figure(num=None, facecolor='w', figsize=figsize)
+    ax = fig.gca()
+
+    data = [] # place holder for all data
+    for i in range(ndata):
+        name = names[i]
+        color = cmap(norm(i))
+        X = dataframes[i].loc[:, ['Lambda_i', 'Sb', 'lambda']].dropna().to_numpy().astype('float64')
+
+        Sb, LAi, gr = X.T
+
+        r = sst.pearsonr(Sb, LAi)[0]
+        gr_mean = np.nanmean(gr)
+        ax.plot([gr_mean], [r], color=color, marker='o', ms=2*ms, label="{:s}, r = {:.2f}".format(name,r))
+
+
+
+    ax.set_xlabel("growth rate", fontsize='large')
+    ax.set_ylabel("r(Sb, Lambda_i)", fontsize='large')
+    ax.tick_params(bottom=True, left=True, labelbottom=True, labelleft=True)
+    ax.tick_params(length=4)
+    ax.set_xlim(xlo, xhi)
+    ax.set_ylim(ylo, yhi)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.legend(loc='upper left', fontsize='medium', bbox_to_anchor=(1.0, 0.98), frameon=False)
+
+    # figure title
+    fig.tight_layout(rect=[0.,0.,1.,0.98])
+    return fig
+
+### processing of Witz et al experimental data ###
 def process_gw(df, time_scale, fitting=False, period=0):
     """
     Method to process experimental data from Witz et al.
@@ -2099,8 +2403,8 @@ def plot_Ivalues_main_models(table, lw=0.5, ms=2, fig_title=None, figsize=None, 
 
     ax.set_xticks(X+0.5*bar_width)
     ax.set_xticklabels(xlabels, rotation='90', fontsize='medium')
-    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
     ax.set_ylim(ymin=0.,ymax=1.)
     ax.set_ylabel("I value", fontsize='medium')
     ax.legend(loc='upper left', fontsize='medium', bbox_to_anchor=(1.,0.98))
@@ -2157,8 +2461,8 @@ def plot_Ivalues(table, label_mapping, nvar, nval=None, lw=0.5, ms=2, fig_title=
     ax.set_yticklabels(labels,fontsize='medium')
     ax.invert_yaxis()
     ax.set_xlabel("I value", fontsize='medium')
-    ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.xaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
+    ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
     ax.set_xlim(xmin=0.,xmax=1.)
     #set_xticks(np.arange(11, dtype=np.float_)/10)
 
@@ -2210,8 +2514,8 @@ def plot_Ivalues_all(table, nvar, lw=0.5, ms=1, fig_title=None, figsize=None, fm
         ax.plot([i], [val], 'o', ms=4*ms, color=color)
     ax.set_ylabel("I value", fontsize='medium')
     ax.set_ylim(0.,1.)
-    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
     #set_xticks(np.arange(11, dtype=np.float_)/10)
 
     rect=[0.,0.,1.,0.99]
@@ -2264,8 +2568,8 @@ def plot_Ivalues_all_overlay(tables, nvar, lw=0.5, ms=1, fig_title=None, figsize
 
     ax.set_ylabel("I value", fontsize='medium')
     ax.set_ylim(0.,1.)
-    ax.yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    ax.yaxis.set_minor_locator(matplotlib.ticker.MultipleLocator(0.1))
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
+    ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
     #set_xticks(np.arange(11, dtype=np.float_)/10)
 
     rect=[0.,0.,1.,0.99]
@@ -2295,4 +2599,242 @@ def load_table(fpath, skiprows=1):
             table.append(tab)
     return table
 
+# GRAVEYARD
+def plot_Lb_Li_LAi_correlations(dataframes, names, \
+        normalize=False, npts_bin=10, binw_dict=None, \
+        lw=0.5, ms=2, figsize=None):
+    """
+    binw:   bin width for Sb (note if normalized is True, then this value must be adjusted accordingly).
+    """
+
+    # checks
+    ndata = len(dataframes)
+    if len(names) != ndata:
+        raise ValueError("names and dataframes must have same length")
+
+
+    if binw_dict is None:
+        binw_dict = {}
+
+    if type(binw_dict) == float:
+        binw_dict = {name: binw_dict for name in names}
+
+    for name in names:
+        if not name in binw_dict:
+            binw_dict[name] = None
+
+    norm = mco.Normalize(vmin=0, vmax=ndata-1)
+    cmap = cm.rainbow
+
+    # make figure
+    fig = plt.figure(num=None, facecolor='w', figsize=figsize)
+    gs = mgs.GridSpec(1, 2, hspace=0.1)
+    ax1 = fig.add_subplot(gs[0,0])
+    ax2 = fig.add_subplot(gs[0,1])
+
+    data = [] # place holder for all data
+    for i in range(ndata):
+        name = names[i]
+        color = cmap(norm(i))
+        df = dataframes[i].loc[:, ['Lambda_i', 'nori init', 'Sb']].dropna().copy()
+        df['Si'] = None
+        func = lambda x: x['nori init']*x['Lambda_i']
+        df.loc[:, 'Si'] = df.loc[:, ['Lambda_i', 'nori init']].apply(func, axis=1)
+
+        X = df.loc[:,['Sb', 'Lambda_i', 'Si']].to_numpy().astype('float64')
+
+        if normalize:
+            mu = np.nanmean(X, axis=0)
+            X = X/mu
+
+            data.append(X)
+
+        Sb, LAi, Li = X.T
+
+        # make Sb binning
+        binw = binw_dict[name]
+        edges = make_binning_edges(Sb, x0=None, x1=None, binw=binw)
+        x0 = edges[0]
+        x1 = edges[-1]
+        hist, edges = np.histogram(Sb, bins=edges, density=True)
+        Sb_binned = 0.5*(edges[:-1]+ edges[1:])
+        nbins = len(Sb_binned)
+
+        # make LAi binning
+        Y_binned_sets = get_binned(Sb, LAi, edges)
+        Y_binned = np.zeros(nbins)
+        Y_counts = np.zeros(nbins)
+        Y_vars = np.zeros(nbins)
+
+        for i in range(nbins):
+            Yi = Y_binned_sets[i]
+            Zi = np.nansum(np.isfinite(Yi),axis=0)
+            if (Zi == 0):
+                continue
+            m = np.nansum(Yi,axis=0) / Zi
+            v = np.nansum((Yi-m)**2,axis=0) / Zi
+            Y_counts[i] = Zi
+            Y_binned[i] = m
+            Y_vars[i] = v
+
+        idx = np.isfinite(Y_counts) & (Y_counts > npts_bin)
+        X_binned = Sb_binned[idx]
+        Y_binned = Y_binned[idx]
+        Y_binned_err = np.sqrt(Y_vars[idx]/Y_counts[idx])
+
+        ax1.errorbar(X_binned, Y_binned, yerr=Y_binned_err, color=color, marker='o', ms=2*ms, ecolor=color, elinewidth=4*lw, lw=lw)
+
+        ax1.set_ylabel("Lambda_i", fontsize='large')
+
+        # make Li binning
+        Y_binned_sets = get_binned(Sb, Li, edges)
+        Y_binned = np.zeros(nbins)
+        Y_counts = np.zeros(nbins)
+        Y_vars = np.zeros(nbins)
+
+        for i in range(nbins):
+            Yi = Y_binned_sets[i]
+            Zi = np.nansum(np.isfinite(Yi),axis=0)
+            if (Zi == 0):
+                continue
+            m = np.nansum(Yi,axis=0) / Zi
+            v = np.nansum((Yi-m)**2,axis=0) / Zi
+            Y_counts[i] = Zi
+            Y_binned[i] = m
+            Y_vars[i] = v
+
+        idx = np.isfinite(Y_counts) & (Y_counts > npts_bin)
+        X_binned = Sb_binned[idx]
+        Y_binned = Y_binned[idx]
+        Y_binned_err = np.sqrt(Y_vars[idx]/Y_counts[idx])
+
+        r1 = sst.pearsonr(Sb, LAi)[0]
+        r2 = sst.pearsonr(Sb, Li)[0]
+
+        ax2.errorbar(X_binned, Y_binned, yerr=Y_binned_err, color=color, marker='o', ms=2*ms, ecolor=color, elinewidth=4*lw, lw=lw, label="{:s}, r1 = {:.2f}, r2 = {:.2f}".format(name,r1,r2))
+
+        ax2.set_ylabel("Li", fontsize='large')
+
+    for ax in ax1,ax2:
+        ax.set_xlabel("Sb", fontsize='large')
+        ax.tick_params(bottom=True, left=True, labelbottom=True, labelleft=True)
+        ax.tick_params(length=4)
+        if normalize:
+            ax.set_xlim(0.5, 1.5)
+            ax.set_ylim(0.5, 1.5)
+            ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
+            ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+            ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
+            ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+        else:
+            ax.set_xlim(0., None)
+            ax.set_ylim(0., None)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.set_aspect('equal')
+    ax2.legend(loc='upper left', fontsize='medium', bbox_to_anchor=(1.0, 0.98), frameon=False)
+
+    # figure title
+    gs.tight_layout(fig, rect=[0.,0.,1.,0.98])
+    return fig
+
+def plot_Lb_LAi_correlations(dataframes, names, \
+        normalize=False, npts_bin=10, binw_dict=None, \
+        lw=0.5, ms=2, figsize=None):
+    """
+    binw:   bin width for Sb (note if normalized is True, then this value must be adjusted accordingly).
+    """
+
+    # checks
+    ndata = len(dataframes)
+    if len(names) != ndata:
+        raise ValueError("names and dataframes must have same length")
+
+    if binw_dict is None:
+        binw_dict = {}
+
+    if type(binw_dict) == float:
+        binw_dict = {name: binw_dict for name in names}
+
+    for name in names:
+        if not name in binw_dict:
+            binw_dict[name] = None
+
+    norm = mco.Normalize(vmin=0, vmax=ndata-1)
+    cmap = cm.rainbow
+
+    # make figure
+    fig = plt.figure(num=None, facecolor='w', figsize=figsize)
+    ax = fig.gca()
+
+    data = [] # place holder for all data
+    for i in range(ndata):
+        name = names[i]
+        color = cmap(norm(i))
+        X = dataframes[i].loc[:, ['Lambda_i', 'Sb']].dropna().to_numpy().astype('float64')
+
+        if normalize:
+            mu = np.nanmean(X, axis=0)
+            X = X/mu
+
+            data.append(X)
+
+        Sb, LAi = X.T
+
+        # make Sb binning
+        binw = binw_dict[name]
+        edges = make_binning_edges(Sb, x0=None, x1=None, binw=binw)
+        x0 = edges[0]
+        x1 = edges[-1]
+        hist, edges = np.histogram(Sb, bins=edges, density=True)
+        Sb_binned = 0.5*(edges[:-1]+ edges[1:])
+        nbins = len(Sb_binned)
+
+        # make LAi binning
+        Y_binned_sets = get_binned(Sb, LAi, edges)
+        Y_binned = np.zeros(nbins)
+        Y_counts = np.zeros(nbins)
+        Y_vars = np.zeros(nbins)
+
+        for i in range(nbins):
+            Yi = Y_binned_sets[i]
+            Zi = np.nansum(np.isfinite(Yi),axis=0)
+            if (Zi == 0):
+                continue
+            m = np.nansum(Yi,axis=0) / Zi
+            v = np.nansum((Yi-m)**2,axis=0) / Zi
+            Y_counts[i] = Zi
+            Y_binned[i] = m
+            Y_vars[i] = v
+
+        idx = np.isfinite(Y_counts) & (Y_counts > npts_bin)
+        X_binned = Sb_binned[idx]
+        Y_binned = Y_binned[idx]
+        Y_binned_err = np.sqrt(Y_vars[idx]/Y_counts[idx])
+
+        r = sst.pearsonr(Sb, LAi)[0]
+        ax.errorbar(X_binned, Y_binned, yerr=Y_binned_err, color=color, marker='o', ms=2*ms, ecolor=color, elinewidth=4*lw, lw=lw, label="{:s}, r = {:.2f}".format(name,r))
+
+    ax.set_xlabel("Sb", fontsize='large')
+    ax.set_ylabel("Lambda_i", fontsize='large')
+    ax.tick_params(bottom=True, left=True, labelbottom=True, labelleft=True)
+    ax.tick_params(length=4)
+    if normalize:
+        ax.set_xlim(0.5, 1.5)
+        ax.set_ylim(0.5, 1.5)
+        ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
+        ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+        ax.yaxis.set_major_locator(ticker.MultipleLocator(0.5))
+        ax.yaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+    else:
+        ax.set_xlim(0., None)
+        ax.set_ylim(0., None)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_aspect('equal')
+    ax.legend(loc='upper left', fontsize='medium', bbox_to_anchor=(1.0, 0.98), frameon=False)
+
+    # figure title
+    fig.tight_layout(rect=[0.,0.,1.,0.98])
+    return fig
 
