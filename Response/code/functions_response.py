@@ -2378,8 +2378,8 @@ def plot_Ivalues_main_models(table, lw=0.5, ms=2, fig_title=None, figsize=None, 
     ax.tick_params(axis='both', which='both', length=4)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_smart_bounds(True)
-    ax.spines['bottom'].set_smart_bounds(True)
+    # ax.spines['left'].set_smart_bounds(True)
+    # ax.spines['bottom'].set_smart_bounds(True)
 
     nconditions = len(table)-1
     nmodels = len(table[0]) - 1
