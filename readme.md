@@ -1,6 +1,6 @@
 # Supplementary information
 
-The repository contains supplementary information for the manuscript : <u>Quantitative examination of five stochastic cell-cycle and cell-size control models for *Escherichia coli* and *Bacillus subtilis*</u>.
+The repository contains supplementary information for the manuscript : "Quantitative examination of five stochastic cell-cycle and cell-size control models for *Escherichia coli* and *Bacillus subtilis*".
 
 Please start at the notebook [frontiers_index](Response/frontiers_index.ipynb) to be guided through the results.
 
