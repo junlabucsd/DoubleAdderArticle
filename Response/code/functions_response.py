@@ -2431,8 +2431,8 @@ def plot_Ivalues(table, label_mapping, nvar, nval=None, lw=0.5, ms=2, fig_title=
     ax.tick_params(axis='both', which='both', length=4)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_smart_bounds(True)
-    ax.spines['bottom'].set_smart_bounds(True)
+    # ax.spines['left'].set_smart_bounds(True)
+    # ax.spines['bottom'].set_smart_bounds(True)
 
     labels = []
     values = []
@@ -2488,8 +2488,8 @@ def plot_Ivalues_all(table, nvar, lw=0.5, ms=1, fig_title=None, figsize=None, fm
     ax.tick_params(axis='both', which='both', length=4)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_smart_bounds(True)
-    ax.spines['bottom'].set_smart_bounds(True)
+    # ax.spines['left'].set_smart_bounds(True)
+    # ax.spines['bottom'].set_smart_bounds(True)
 
 
     values_default = []
@@ -2540,8 +2540,8 @@ def plot_Ivalues_all_overlay(tables, nvar, lw=0.5, ms=1, fig_title=None, figsize
     ax.tick_params(axis='both', which='both', length=4)
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
-    ax.spines['left'].set_smart_bounds(True)
-    ax.spines['bottom'].set_smart_bounds(True)
+    # ax.spines['left'].set_smart_bounds(True)
+    # ax.spines['bottom'].set_smart_bounds(True)
 
 
     for table in tables:

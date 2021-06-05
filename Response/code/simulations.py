@@ -63,7 +63,6 @@ def run_IDA(ngen, params):
 
     return pd.DataFrame(data={'LAi': LAis, 'dLAi': dLAis, 'Sd': Sds, 'dSd': dSds})
 
-
 def plot_2varcorr_overlay(dataframes, field_x, field_y, \
         normalize=False, npts_bin=10, binw_dict=None, \
         x0=None, x1 = None, func_slope=None, \
